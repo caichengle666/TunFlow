@@ -21,6 +21,8 @@ func main() {
 		Height: 720,
 		MinWidth: 860,
 		MinHeight: 620,
+		Frameless:       true,
+		HideWindowOnClose: true,
 		AssetServer: &assetserver.Options{
 			Assets: frontend,
 		},
