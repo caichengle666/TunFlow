@@ -52,6 +52,11 @@ type Status struct {
 	StartWithWindows bool   `json:"startWithWindows"`
 }
 
+type NetworkInterface struct {
+	Name      string   `json:"name"`
+	Addresses []string `json:"addresses"`
+}
+
 const (
 	geoIPDownloadURL   = "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat"
 	geoSiteDownloadURL = "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat"
@@ -103,6 +108,30 @@ func (a *App) GetConfig() Config {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	return a.cfg
+}
+
+func (a *App) GetNetworkInterfaces() ([]NetworkInterface, error) {
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		return nil, fmt.Errorf("读取网络接口失败: %w", err)
+	}
+	tunName := strings.TrimPrefix(strings.TrimPrefix(a.GetConfig().Device, "tun://"), "tun:")
+	result := make([]NetworkInterface, 0, len(interfaces))
+	for _, iface := range interfaces {
+		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 || strings.EqualFold(iface.Name, tunName) {
+			continue
+		}
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		addresses := make([]string, 0, len(addrs))
+		for _, addr := range addrs {
+			addresses = append(addresses, addr.String())
+		}
+		result = append(result, NetworkInterface{Name: iface.Name, Addresses: addresses})
+	}
+	return result, nil
 }
 
 func (a *App) GetStatus() Status {

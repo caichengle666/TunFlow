@@ -85,6 +85,10 @@ func (a *App) ShowWindow() {
 	if a.ctx != nil {
 		runtime.WindowShow(a.ctx)
 		runtime.WindowUnminimise(a.ctx)
+		// WindowShow restores visibility but does not always activate a
+		// frameless Wails window after it was hidden to the tray.
+		runtime.WindowSetAlwaysOnTop(a.ctx, true)
+		runtime.WindowSetAlwaysOnTop(a.ctx, false)
 	}
 }
 

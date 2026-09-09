@@ -34,6 +34,23 @@ func runWindows(args ...string) error {
 	return nil
 }
 
+func windowsTunDefaultRouteReady() (bool, error) {
+	out, err := exec.Command("route", "print", "0.0.0.0").CombinedOutput()
+	if err != nil {
+		return false, fmt.Errorf("读取 TUN 默认路由失败: %w", err)
+	}
+	for _, line := range strings.Split(string(out), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 4 || fields[0] != "0.0.0.0" || fields[1] != "0.0.0.0" {
+			continue
+		}
+		if fields[2] == "198.18.0.1" || fields[3] == "198.18.0.1" {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func defaultGateway() (string, error) {
 	out, err := exec.Command("route", "print", "0.0.0.0").CombinedOutput()
 	if err != nil {
@@ -149,6 +166,13 @@ func (a *App) setupRoutesLocked() error {
 			_ = runWindows("route", "DELETE", proxyIP, "MASK", "255.255.255.255", gateway)
 		}
 		return fmt.Errorf("添加 TUN 默认路由失败: %w", err)
+	}
+	ready, err := windowsTunDefaultRouteReady()
+	if err != nil {
+		return err
+	}
+	if !ready {
+		return errors.New("TUN 默认路由未出现在 Windows 路由表中")
 	}
 
 	a.up = routeState{
