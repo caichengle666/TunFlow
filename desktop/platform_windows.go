@@ -3,7 +3,6 @@
 package main
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"net"
@@ -60,14 +59,14 @@ func interfaceIndex(name string) (string, error) {
 	}
 	for _, line := range strings.Split(string(out), "\n") {
 		fields := strings.Fields(line)
-		if len(fields) < 5 {
+		if len(fields) < 4 {
 			continue
 		}
 		idx := fields[0]
 		if _, err := strconv.Atoi(idx); err != nil {
 			continue
 		}
-		if strings.EqualFold(strings.Join(fields[4:], " "), name) || strings.EqualFold(fields[len(fields)-1], name) {
+		if strings.EqualFold(strings.TrimSpace(strings.Join(fields[3:], " ")), name) {
 			return idx, nil
 		}
 	}
@@ -95,7 +94,10 @@ func resolveProxyIP(proxyURL string) (string, error) {
 		return "", err
 	}
 	if ip := net.ParseIP(host); ip != nil {
-		return ip.To4().String(), nil
+		if v4 := ip.To4(); v4 != nil {
+			return v4.String(), nil
+		}
+		return "", errors.New("当前 Windows 路由管理暂只支持 IPv4 SOCKS5 地址")
 	}
 	ips, err := net.LookupIP(host)
 	if err != nil {
@@ -132,8 +134,9 @@ func (a *App) setupRoutesLocked() error {
 		return err
 	}
 
-	// A remote SOCKS5 endpoint must stay on the physical interface, otherwise
-	// the default route through TUN would feed the proxy connection back into TUN.
+	// Keep the remote SOCKS5 endpoint on the physical interface. Without this
+	// host route, the default route below would send the proxy connection back
+	// into TUN and create a routing loop.
 	proxyBypass := proxyIP != "" && !net.ParseIP(proxyIP).IsLoopback()
 	if proxyBypass {
 		if err := runWindows("route", "ADD", proxyIP, "MASK", "255.255.255.255", gateway, "METRIC", "1"); err != nil {
@@ -175,5 +178,3 @@ func (a *App) teardownRoutesLocked() error {
 	a.up = routeState{}
 	return firstErr
 }
-
-var _ = bufio.NewScanner
