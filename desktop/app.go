@@ -110,7 +110,15 @@ func (a *App) GetTrafficStats() engine.TrafficStats {
 	return engine.GetTrafficStats()
 }
 
-func (a *App) UpdateRuleFiles() error {
+func (a *App) UpdateGeoIP() error {
+	return a.updateRuleFile(geoIPDownloadURL, "geoip.dat", "GeoIP")
+}
+
+func (a *App) UpdateGeoSite() error {
+	return a.updateRuleFile(geoSiteDownloadURL, "geosite.dat", "GeoSite")
+}
+
+func (a *App) updateRuleFile(source, name, label string) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
@@ -119,22 +127,13 @@ func (a *App) UpdateRuleFiles() error {
 		return err
 	}
 	client := &http.Client{Timeout: 2 * time.Minute}
-	geoIPTemp, err := downloadRuleFile(client, geoIPDownloadURL, dir, "geoip.dat")
+	temp, err := downloadRuleFile(client, source, dir, name)
 	if err != nil {
-		return fmt.Errorf("更新 GeoIP 失败: %w", err)
+		return fmt.Errorf("更新 %s 失败: %w", label, err)
 	}
-	defer os.Remove(geoIPTemp)
-	geoSiteTemp, err := downloadRuleFile(client, geoSiteDownloadURL, dir, "geosite.dat")
-	if err != nil {
-		return fmt.Errorf("更新 GeoSite 失败: %w", err)
-	}
-	defer os.Remove(geoSiteTemp)
-
-	if err := replaceRuleFile(geoIPTemp, filepath.Join(dir, "geoip.dat")); err != nil {
-		return fmt.Errorf("替换 GeoIP 文件失败: %w", err)
-	}
-	if err := replaceRuleFile(geoSiteTemp, filepath.Join(dir, "geosite.dat")); err != nil {
-		return fmt.Errorf("替换 GeoSite 文件失败: %w", err)
+	defer os.Remove(temp)
+	if err := replaceRuleFile(temp, filepath.Join(dir, name)); err != nil {
+		return fmt.Errorf("替换 %s 文件失败: %w", label, err)
 	}
 	return nil
 }
