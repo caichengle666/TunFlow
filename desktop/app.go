@@ -280,6 +280,7 @@ func (a *App) SaveConfig(cfg Config) error {
 		return err
 	}
 	a.cfg = cfg
+	a.err = nil
 	return a.saveLocked()
 }
 
