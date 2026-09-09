@@ -29,6 +29,9 @@ on:
       - 'go.sum'
       - '.github/workflows/desktop.yml'
 
+permissions:
+  contents: write
+
 jobs:
   windows:
     runs-on: windows-latest
@@ -75,7 +78,7 @@ jobs:
       - name: Add version metadata
         shell: powershell
         run: |
-          $version = "0.1.$env:GITHUB_RUN_NUMBER"
+          $version = (Get-Content 'desktop/wails.json' -Raw | ConvertFrom-Json).info.productVersion
           $exe = 'desktop/build/bin/TunFlow.exe'
           "TunFlow $version" | Out-File -Encoding utf8 (Join-Path $env:RUNNER_TEMP 'version.txt')
           Get-Item $exe | Format-List Name,Length,LastWriteTime
@@ -95,3 +98,22 @@ jobs:
         with:
           name: TunFlow-windows-amd64
           path: desktop/build/bin/
+
+      - name: Create release tag
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = (Get-Content 'desktop/wails.json' -Raw | ConvertFrom-Json).info.productVersion
+          $tag = "v$version"
+          git fetch --tags --force
+          $existing = git tag -l $tag
+          if ($existing) {
+            Write-Host "Tag $tag already exists; nothing to do."
+            exit 0
+          }
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git tag -a $tag $env:GITHUB_SHA -m "TunFlow $tag"
+          git push origin $tag
