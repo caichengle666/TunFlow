@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -19,12 +21,15 @@ import (
 )
 
 type App struct {
-	ctx         context.Context
-	mu          sync.Mutex
-	cfg         Config
-	up          routeState
-	err         error
-	trayUpdates chan struct{}
+	ctx                context.Context
+	mu                 sync.Mutex
+	cfg                Config
+	up                 routeState
+	err                error
+	trayEnd            func()
+	configWatchStop    chan struct{}
+	configWatchWG      sync.WaitGroup
+	configDiskChecksum string
 }
 
 type Config struct {
@@ -64,7 +69,6 @@ const (
 
 func NewApp() *App {
 	app := &App{
-		trayUpdates: make(chan struct{}, 1),
 		cfg: Config{
 			Proxy:            "socks5://127.0.0.1:1080",
 			Device:           "tun://TunFlow",
@@ -87,21 +91,32 @@ func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	a.load()
 	a.normalizeConfigLocked()
+	a.refreshConfigDiskChecksumLocked()
+	a.startConfigWatcherLocked()
 	a.startSystemTray()
-	select {
-	case a.trayUpdates <- struct{}{}:
-	default:
-	}
 }
 
 func (a *App) shutdown(ctx context.Context) {
 	_ = ctx
 	a.mu.Lock()
-	defer a.mu.Unlock()
+	watchStop := a.configWatchStop
+	a.configWatchStop = nil
+	if watchStop != nil {
+		close(watchStop)
+	}
+	trayEnd := a.trayEnd
+	a.trayEnd = nil
 	if engine.Running() || a.up.active {
 		_ = a.stopLocked()
 	}
 	_ = a.saveLocked()
+	a.mu.Unlock()
+	if watchStop != nil {
+		a.configWatchWG.Wait()
+	}
+	if trayEnd != nil {
+		trayEnd()
+	}
 }
 
 func (a *App) GetConfig() Config {
@@ -164,7 +179,6 @@ func (a *App) UpdateGeoSite() error {
 func (a *App) updateRuleFile(source, name, label string) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-
 	dir, err := executableDir()
 	if err != nil {
 		return err
@@ -198,7 +212,6 @@ func downloadRuleFile(client *http.Client, source, dir, name string) (string, er
 	if response.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("HTTP 状态码 %d", response.StatusCode)
 	}
-
 	temp, err := os.CreateTemp(dir, "."+name+".tmp-*")
 	if err != nil {
 		return "", err
@@ -279,9 +292,24 @@ func (a *App) SaveConfig(cfg Config) error {
 	if err := setStartWithWindows(cfg.StartWithWindows); err != nil {
 		return err
 	}
+	oldCfg := a.cfg
+	running := engine.Running()
 	a.cfg = cfg
+	if err := a.saveLocked(); err != nil {
+		a.cfg = oldCfg
+		return err
+	}
+	if running {
+		if err := a.applyRunningConfigLocked(oldCfg); err != nil {
+			_ = setStartWithWindows(oldCfg.StartWithWindows)
+			a.cfg = oldCfg
+			_ = a.saveLocked()
+			a.err = err
+			return err
+		}
+	}
 	a.err = nil
-	return a.saveLocked()
+	return nil
 }
 
 func (a *App) Start() error {
@@ -289,17 +317,7 @@ func (a *App) Start() error {
 	defer a.mu.Unlock()
 	err := a.startLocked()
 	a.err = err
-	if err == nil {
-		a.notifyTrayChangeLocked()
-	}
 	return err
-}
-
-func (a *App) notifyTrayChangeLocked() {
-	select {
-	case a.trayUpdates <- struct{}{}:
-	default:
-	}
 }
 
 func (a *App) startLocked() error {
@@ -313,11 +331,9 @@ func (a *App) startLocked() error {
 		return errors.New("TUN 设备不能为空")
 	}
 	a.normalizeConfigLocked()
-
 	if err := checkProxyEndpoint(a.cfg.Proxy); err != nil {
 		return err
 	}
-
 	key := &engine.Key{
 		Proxy:        strings.TrimSpace(a.cfg.Proxy),
 		Device:       strings.TrimSpace(a.cfg.Device),
@@ -343,44 +359,11 @@ func (a *App) startLocked() error {
 	return nil
 }
 
-func errString(err error) string {
-	if err == nil {
-		return ""
-	}
-	return err.Error()
-}
-
-func checkProxyEndpoint(rawURL string) error {
-	proxyURL := rawURL
-	if !strings.Contains(proxyURL, "://") {
-		proxyURL = "socks5://" + proxyURL
-	}
-	parsed, err := url.Parse(proxyURL)
-	if err != nil {
-		return fmt.Errorf("SOCKS5 地址无效: %w", err)
-	}
-	host := parsed.Hostname()
-	port := parsed.Port()
-	if host == "" || port == "" {
-		return errors.New("SOCKS5 地址必须包含主机和端口")
-	}
-	address := net.JoinHostPort(host, port)
-	conn, err := net.DialTimeout("tcp", address, 3*time.Second)
-	if err != nil {
-		return fmt.Errorf("SOCKS5 入口不可达 %s: %w", address, err)
-	}
-	_ = conn.Close()
-	return nil
-}
-
 func (a *App) Stop() error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	err := a.stopLocked()
 	a.err = err
-	if err == nil {
-		a.notifyTrayChangeLocked()
-	}
 	return err
 }
 
@@ -465,5 +448,73 @@ func (a *App) saveLocked() error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0o600)
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		return err
+	}
+	sum := sha256.Sum256(data)
+	a.configDiskChecksum = hex.EncodeToString(sum[:])
+	return nil
+}
+
+func (a *App) refreshConfigDiskChecksumLocked() {
+	data, err := os.ReadFile(a.configPath())
+	if err != nil {
+		return
+	}
+	sum := sha256.Sum256(data)
+	a.configDiskChecksum = hex.EncodeToString(sum[:])
+}
+
+func (a *App) applyRunningConfigLocked(oldCfg Config) error {
+	if !engine.Running() {
+		return nil
+	}
+	if err := a.stopLocked(); err != nil {
+		return fmt.Errorf("应用新配置前停止旧核心失败: %w", err)
+	}
+	if err := a.startLocked(); err != nil {
+		_ = a.startWithConfigLocked(oldCfg)
+		return fmt.Errorf("应用新配置失败: %w", err)
+	}
+	return nil
+}
+
+func (a *App) startWithConfigLocked(cfg Config) error {
+	saved := a.cfg
+	a.cfg = cfg
+	err := a.startLocked()
+	if err != nil {
+		a.cfg = saved
+	}
+	return err
+}
+
+func errString(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
+}
+
+func checkProxyEndpoint(rawURL string) error {
+	proxyURL := rawURL
+	if !strings.Contains(proxyURL, "://") {
+		proxyURL = "socks5://" + proxyURL
+	}
+	parsed, err := url.Parse(proxyURL)
+	if err != nil {
+		return fmt.Errorf("SOCKS5 地址无效: %w", err)
+	}
+	host := parsed.Hostname()
+	port := parsed.Port()
+	if host == "" || port == "" {
+		return errors.New("SOCKS5 地址必须包含主机和端口")
+	}
+	address := net.JoinHostPort(host, port)
+	conn, err := net.DialTimeout("tcp", address, 3*time.Second)
+	if err != nil {
+		return fmt.Errorf("SOCKS5 入口不可达 %s: %w", address, err)
+	}
+	_ = conn.Close()
+	return nil
 }
