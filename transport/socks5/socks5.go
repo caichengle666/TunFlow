@@ -113,6 +113,8 @@ func (a Addr) Valid() bool {
 		if len(a) < 1+net.IPv6len+2 {
 			return false
 		}
+	default:
+		return false
 	}
 	return true
 }
@@ -170,6 +172,9 @@ type User struct {
 
 // ClientHandshake fast-tracks SOCKS initialization to get target address to connect on client side.
 func ClientHandshake(rw io.ReadWriter, addr Addr, command Command, user *User) (Addr, error) {
+	if !addr.Valid() {
+		return nil, errors.New("invalid socks5 destination address")
+	}
 	buf := make([]byte, MaxAddrLen)
 
 	var method uint8
@@ -327,6 +332,9 @@ func SerializeAddr(domainName string, dstIP netip.Addr, dstPort uint16) Addr {
 
 	if domainName != "" /* Domain Name */ {
 		length := len(domainName)
+		if length > 255 {
+			return nil
+		}
 		buf = [][]byte{{AtypDomainName, uint8(length)}, []byte(domainName), port[:]}
 	} else if dstIP.Is4() /* IPv4 */ {
 		buf = [][]byte{{AtypIPv4}, dstIP.AsSlice(), port[:]}
@@ -402,6 +410,7 @@ func DecodeUDPPacket(packet []byte) (addr Addr, payload []byte, err error) {
 	addr = SplitAddr(packet[3:])
 	if addr == nil {
 		err = errors.New("socks5 UDP addr is nil")
+		return nil, nil, err
 	}
 
 	payload = packet[3+len(addr):]

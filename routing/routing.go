@@ -67,27 +67,14 @@ type trafficCounter struct {
 	downloadTemp  atomic.Int64
 	uploadRate    atomic.Int64
 	downloadRate  atomic.Int64
-	once          sync.Once
-}
-
-func (c *trafficCounter) ensureTicker() {
-	c.once.Do(func() {
-		go func() {
-			ticker := time.NewTicker(time.Second)
-			defer ticker.Stop()
-			for range ticker.C {
-				c.uploadRate.Store(c.uploadTemp.Swap(0))
-				c.downloadRate.Store(c.downloadTemp.Swap(0))
-			}
-		}()
-	})
+	sampleMu      sync.Mutex
+	lastSample    time.Time
 }
 
 func (c *trafficCounter) uploaded(n int) {
 	if n <= 0 {
 		return
 	}
-	c.ensureTicker()
 	v := int64(n)
 	c.uploadTotal.Add(v)
 	c.uploadTemp.Add(v)
@@ -97,13 +84,20 @@ func (c *trafficCounter) downloaded(n int) {
 	if n <= 0 {
 		return
 	}
-	c.ensureTicker()
 	v := int64(n)
 	c.downloadTotal.Add(v)
 	c.downloadTemp.Add(v)
 }
 
 func (c *trafficCounter) snapshot() TrafficStats {
+	c.sampleMu.Lock()
+	now := time.Now()
+	if c.lastSample.IsZero() || now.Sub(c.lastSample) >= time.Second {
+		c.uploadRate.Store(c.uploadTemp.Swap(0))
+		c.downloadRate.Store(c.downloadTemp.Swap(0))
+		c.lastSample = now
+	}
+	c.sampleMu.Unlock()
 	return TrafficStats{
 		UploadTotal: c.uploadTotal.Load(), DownloadTotal: c.downloadTotal.Load(),
 		UploadPerSecond: c.uploadRate.Load(), DownloadPerSecond: c.downloadRate.Load(),

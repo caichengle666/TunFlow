@@ -1,1 +1,4 @@
-TunFlow v0.1.1
+TunFlow v0.1.3
+
+- Improve Windows route cleanup and prevent stopping the core while routes remain.
+- Harden SOCKS5 address validation and traffic statistics sampling.

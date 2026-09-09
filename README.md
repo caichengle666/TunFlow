@@ -35,6 +35,10 @@ TunFlow / tun2socks 核心
 - Windows 自动设置 TUN IPv4 地址
 - Windows 自动添加 TUN 默认路由
 - 自动为远程 SOCKS5 地址添加防环路主机路由
+- Windows 路由事务回滚、原始 TUN 地址/DHCP/网关恢复
+- 网络切换和 SOCKS5 DNS 地址变化自动重建路由
+- 自动选择或按指定物理网卡绑定 SOCKS5 出口
+- 统计计数和 SOCKS5 地址边界条件保护
 - 配置持久化
 - 中文桌面控制面板
 

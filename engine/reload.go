@@ -2,7 +2,9 @@ package engine
 
 import (
 	"errors"
+	"net"
 
+	"github.com/xjasonlyu/tun2socks/v2/dialer"
 	"github.com/xjasonlyu/tun2socks/v2/routing"
 	"github.com/xjasonlyu/tun2socks/v2/tunnel"
 )
@@ -47,6 +49,17 @@ func Reload(k *Key) error {
 	})
 	if err != nil {
 		return err
+	}
+	var iface *net.Interface
+	if k.Interface != "" {
+		iface, err = net.InterfaceByName(k.Interface)
+		if err != nil {
+			return err
+		}
+	}
+	dialer.Reset()
+	if iface != nil {
+		dialer.RegisterSockOpt(dialer.WithBindToInterface(iface))
 	}
 
 	_defaultProxy = proxyConn

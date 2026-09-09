@@ -13,6 +13,8 @@ TunFlow Desktop 是基于 TunFlow 核心的桌面控制层，目标是把 `tun2s
 - Windows 自动配置 TUN IPv4 地址
 - Windows 默认路由切换到 TUN
 - 自动为远程 SOCKS5 服务增加物理网卡直连的防环路路由
+- 路由配置失败自动回滚，停止时恢复原始 TUN IPv4/DHCP/网关状态
+- 网络切换或 SOCKS5 DNS 地址变化时自动重建路由并刷新核心网卡绑定
 - 配置文件持久化
 - Wails 桌面 UI
 
@@ -32,6 +34,6 @@ Wails v2 需要桌面 WebView 运行环境；Windows 使用系统 WebView2。
 
 ## 重要说明
 
-当前分流第一阶段按目标 IP/CIDR 执行。完整的域名规则、GeoIP/GeoSite、DNS 防泄漏、IPv6 路由自动化和网络切换自动恢复会在后续阶段加入。
+当前分流第一阶段按目标 IP/CIDR 执行。域名规则、DNS 防泄漏和 IPv6 系统路由自动化仍不在当前版本范围内。
 
 Windows 自动路由属于系统级网络操作，需要管理员权限或等效权限。

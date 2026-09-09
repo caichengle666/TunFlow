@@ -6,8 +6,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"reflect"
+	"sort"
 	"strings"
 	"time"
 
@@ -39,8 +41,46 @@ func (a *App) configWatchLoop(stop <-chan struct{}) {
 			return
 		case <-ticker.C:
 			a.reloadConfigFromDisk()
+			a.refreshNetworkRoutes()
 		}
 	}
+}
+
+func (a *App) refreshNetworkRoutes() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if !engine.Running() || !a.cfg.AutoRoute || !a.up.active {
+		return
+	}
+	signature, err := currentNetworkSignature(a.cfg.Interface)
+	if err == nil {
+		if ips, resolveErr := resolveProxyIPs(a.cfg.Proxy); resolveErr == nil {
+			sort.Strings(ips)
+			signature += "|" + strings.Join(ips, ",")
+		}
+	}
+	if err != nil || signature == "" || signature == a.networkSignature {
+		return
+	}
+	if err := a.teardownRoutesLocked(); err != nil {
+		a.err = fmt.Errorf("网络切换时清理旧路由失败: %w", err)
+		return
+	}
+	if err := a.selectRuntimeInterfaceLocked(); err != nil {
+		a.err = fmt.Errorf("网络切换后选择物理出口失败: %w", err)
+		return
+	}
+	if err := a.setupRoutesLocked(); err != nil {
+		a.err = fmt.Errorf("网络切换后重建路由失败: %w", err)
+		return
+	}
+	if err := engine.Reload(a.buildEngineKeyLocked(a.cfg)); err != nil {
+		_ = a.teardownRoutesLocked()
+		a.err = fmt.Errorf("网络切换后刷新核心网卡绑定失败: %w", err)
+		return
+	}
+	a.networkSignature = signature
+	a.err = nil
 }
 
 func readConfigFile(path string) (Config, []byte, error) {

@@ -4,6 +4,12 @@ package main
 
 import "errors"
 
+func currentNetworkSignature(_ string) (string, error) { return "", nil }
+
+func resolveProxyIPs(_ string) ([]string, error) { return nil, nil }
+
+func (a *App) selectRuntimeInterfaceLocked() error { return nil }
+
 type routeState struct {
 	active bool
 }

@@ -30,6 +30,8 @@ type App struct {
 	configWatchStop    chan struct{}
 	configWatchWG      sync.WaitGroup
 	configDiskChecksum string
+	networkSignature   string
+	runtimeInterface   string
 }
 
 type Config struct {
@@ -328,10 +330,14 @@ func (a *App) Start() error {
 }
 
 func (a *App) buildEngineKeyLocked(cfg Config) *engine.Key {
+	interfaceName := strings.TrimSpace(cfg.Interface)
+	if interfaceName == "" {
+		interfaceName = a.runtimeInterface
+	}
 	return &engine.Key{
 		Proxy:        strings.TrimSpace(cfg.Proxy),
 		Device:       strings.TrimSpace(cfg.Device),
-		Interface:    strings.TrimSpace(cfg.Interface),
+		Interface:    interfaceName,
 		RoutingMode:  strings.TrimSpace(cfg.Mode),
 		DirectCIDRs:  append([]string(nil), cfg.DirectCIDRs...),
 		DirectRules:  append([]string(nil), cfg.DirectRules...),
@@ -356,12 +362,20 @@ func (a *App) startLocked() error {
 	if err := checkProxyEndpoint(a.cfg.Proxy); err != nil {
 		return err
 	}
+	if a.cfg.AutoRoute {
+		if err := a.selectRuntimeInterfaceLocked(); err != nil {
+			return err
+		}
+	}
 	engine.Insert(a.buildEngineKeyLocked(a.cfg))
 	if err := engine.StartE(); err != nil {
 		return fmt.Errorf("启动核心失败: %w", err)
 	}
 	if a.cfg.AutoRoute {
 		if err := a.setupRoutesLocked(); err != nil {
+			if a.up.active {
+				return fmt.Errorf("%w；系统路由仍需清理，核心保持运行", err)
+			}
 			_ = engine.StopE()
 			return err
 		}
@@ -380,7 +394,7 @@ func (a *App) Stop() error {
 func (a *App) stopLocked() (firstErr error) {
 	if a.up.active {
 		if err := a.teardownRoutesLocked(); err != nil {
-			firstErr = err
+			return fmt.Errorf("停止核心前清理系统路由失败: %w", err)
 		}
 	}
 	if err := engine.StopE(); err != nil && firstErr == nil {
