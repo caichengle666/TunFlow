@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"github.com/xjasonlyu/tun2socks/v2/engine"
 )
 
@@ -98,6 +99,7 @@ func (a *App) reloadConfigFromDisk() {
 		// The bytes changed but the effective configuration did not.
 		a.configDiskChecksum = checksum
 		a.err = nil
+		a.emitConfigReload("unchanged", "")
 		return
 	}
 
@@ -108,6 +110,7 @@ func (a *App) reloadConfigFromDisk() {
 		a.err = err
 		// Do not advance configDiskChecksum. A later poll will retry the same
 		// configuration automatically after the transient error is gone.
+		a.emitConfigReload("failed", err.Error())
 		return
 	}
 
@@ -119,10 +122,22 @@ func (a *App) reloadConfigFromDisk() {
 			a.err = err
 			// Keep the checksum pointing at the last successfully applied file so
 			// the watcher retries this exact external edit.
+			a.emitConfigReload("failed", err.Error())
 			return
 		}
 	}
 
 	a.configDiskChecksum = checksum
 	a.err = nil
+	a.emitConfigReload("applied", "")
+}
+
+func (a *App) emitConfigReload(status, message string) {
+	if a.ctx == nil {
+		return
+	}
+	runtime.EventsEmit(a.ctx, "config-reloaded", map[string]string{
+		"status":  status,
+		"message": message,
+	})
 }
