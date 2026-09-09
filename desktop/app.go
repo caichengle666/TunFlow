@@ -273,11 +273,10 @@ func (a *App) SaveConfig(cfg Config) error {
 	}
 	if running {
 		if err := a.applyRunningConfigLocked(oldCfg); err != nil {
-			_ = setStartWithWindows(oldCfg.StartWithWindows)
-			a.cfg = oldCfg
-			_ = a.saveLocked()
 			a.err = err
-			return err
+			// Keep the saved proxy on disk even when the running engine cannot
+			// hot-reload. The user can stop/start to apply it cleanly.
+			return nil
 		}
 	}
 	a.err = nil
