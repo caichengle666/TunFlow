@@ -6,6 +6,7 @@ import (
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
+	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 )
 
 //go:embed frontend
@@ -20,7 +21,7 @@ func main() {
 		Height: 720,
 		MinWidth: 860,
 		MinHeight: 620,
-		AssetServer: options.AssetServer{
+		AssetServer: &assetserver.Options{
 			Assets: frontend,
 		},
 		BackgroundColour: &options.RGBA{R: 13, G: 14, B: 21, A: 255},
