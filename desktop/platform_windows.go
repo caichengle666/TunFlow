@@ -13,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/xjasonlyu/tun2socks/v2/engine"
 )
 
 const tunFlowGateway = "198.18.0.1"

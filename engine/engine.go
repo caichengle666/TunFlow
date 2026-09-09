@@ -86,7 +86,8 @@ func GetTrafficStats() TrafficStats {
 	}
 }
 
-func Insert(k *Key)                           { _engineMu.Lock(); _defaultKey = k; _engineMu.Unlock() }
+func Insert(k *Key) { _engineMu.Lock(); _defaultKey = k; _engineMu.Unlock() }
+
 func SetICMPHandler(h adapter.NetworkHandler) { _engineMu.Lock(); _icmpHandler = h; _engineMu.Unlock() }
 
 func start() error {
