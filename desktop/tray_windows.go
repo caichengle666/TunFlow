@@ -84,12 +84,18 @@ func (a *App) ShowWindow() {
 	}
 }
 
-func (a *App) MinimizeToTray() {
-	a.HideToTray()
-}
+func (a *App) MinimizeToTray() { a.HideToTray() }
+func (a *App) CloseToTray() { a.HideToTray() }
 
-func (a *App) CloseToTray() {
-	a.HideToTray()
+func (a *App) ToggleMaximize() {
+	if a.ctx == nil {
+		return
+	}
+	if runtime.WindowIsMaximised(a.ctx) {
+		runtime.WindowUnmaximise(a.ctx)
+	} else {
+		runtime.WindowMaximise(a.ctx)
+	}
 }
 
 func (a *App) QuitApp() {
