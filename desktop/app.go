@@ -69,7 +69,7 @@ const (
 
 func NewApp() *App {
 	return &App{cfg: Config{
-		Proxy:            "socks5://127.0.0.1:1080",
+		Proxy:            "",
 		Device:           "tun://TunFlow",
 		Mode:             "global",
 		DirectCIDRs:      []string{},
@@ -86,8 +86,11 @@ func (a *App) startup(ctx context.Context) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.ctx = ctx
-	a.load()
+	_ = a.load()
 	a.normalizeConfigLocked()
+	if _, err := os.Stat(a.configPath()); os.IsNotExist(err) {
+		_ = a.saveLocked()
+	}
 	a.refreshConfigDiskChecksumLocked()
 	a.startConfigWatcherLocked()
 	a.startSystemTray()
@@ -487,29 +490,24 @@ func bundledDataPath(name string) (string, bool) {
 }
 
 func (a *App) configPath() string {
-	dir, err := os.UserConfigDir()
+	exe, err := os.Executable()
 	if err != nil {
-		return "tunflow.json"
+		return "config.json"
 	}
-	return filepath.Join(dir, "TunFlow", "config.json")
+	return filepath.Join(filepath.Dir(exe), "config.json")
 }
 
-func (a *App) load() {
+func (a *App) load() error {
 	data, err := os.ReadFile(a.configPath())
 	if err != nil {
-		return
+		return err
 	}
-	var cfg Config
-	if json.Unmarshal(data, &cfg) == nil && cfg.Proxy != "" && cfg.Device != "" {
-		a.cfg = cfg
-	}
+	data = strings.TrimSpace(strings.TrimPrefix(string(data), "\ufeff")) |> []byte // invalid placeholder
+	return nil
 }
 
 func (a *App) saveLocked() error {
 	path := a.configPath()
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
 	data, err := json.MarshalIndent(a.cfg, "", "  ")
 	if err != nil {
 		return err
