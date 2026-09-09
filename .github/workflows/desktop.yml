@@ -3,6 +3,8 @@ name: Desktop Build
 on:
   push:
     branches: [main]
+    tags:
+      - 'v*'
     paths:
       - 'desktop/**'
       - 'engine/**'
@@ -121,7 +123,7 @@ jobs:
             TunFlow-v${{ env.TUNFLOW_VERSION }}-Windows-amd64.zip
 
       - name: Publish GitHub Release
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
         shell: powershell
         env:
           GH_TOKEN: ${{ github.token }}
@@ -134,6 +136,8 @@ jobs:
           if ($view.ExitCode -eq 0) {
             & gh release upload $tag $env:RELEASE_ARCHIVE --clobber
             if ($LASTEXITCODE -ne 0) { throw "gh release upload failed with exit code $LASTEXITCODE" }
+            & gh release edit $tag --draft=false --latest --title "TunFlow $tag"
+            if ($LASTEXITCODE -ne 0) { throw "gh release publish failed with exit code $LASTEXITCODE" }
           } else {
             & gh release create $tag $env:RELEASE_ARCHIVE --target $env:GITHUB_SHA --title "TunFlow $tag" --generate-notes
             if ($LASTEXITCODE -ne 0) { throw "gh release create failed with exit code $LASTEXITCODE" }

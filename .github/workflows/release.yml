@@ -8,9 +8,7 @@ concurrency:
   cancel-in-progress: true
 
 on:
-  push:
-    tags:
-      - 'v*'
+  workflow_dispatch:
 
 jobs:
   release:
