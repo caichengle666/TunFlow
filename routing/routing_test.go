@@ -3,6 +3,7 @@ package routing
 import (
 	"context"
 	"net"
+	"net/netip"
 	"testing"
 
 	M "github.com/xjasonlyu/tun2socks/v2/metadata"
@@ -19,8 +20,8 @@ func TestBypassCIDR(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	inside := &M.Metadata{DstIP: net.ParseIP("192.168.1.10").Unmap()}
-	outside := &M.Metadata{DstIP: net.ParseIP("8.8.8.8").Unmap()}
+	inside := &M.Metadata{DstIP: netip.MustParseAddr("192.168.1.10")}
+	outside := &M.Metadata{DstIP: netip.MustParseAddr("8.8.8.8")}
 	if !r.useDirect(inside) {
 		t.Fatal("expected LAN destination to use direct path")
 	}
@@ -30,7 +31,7 @@ func TestBypassCIDR(t *testing.T) {
 }
 
 func TestGlobalAndDirectModes(t *testing.T) {
-	metadata := &M.Metadata{DstIP: net.ParseIP("192.168.1.10").Unmap()}
+	metadata := &M.Metadata{DstIP: netip.MustParseAddr("192.168.1.10")}
 
 	global, err := New(testProxy{}, ModeGlobal, []string{"192.168.0.0/16"})
 	if err != nil {
