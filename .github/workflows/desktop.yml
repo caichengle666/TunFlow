@@ -37,7 +37,6 @@ permissions:
 
 jobs:
   windows:
-    name: Windows amd64
     runs-on: windows-latest
     steps:
       - name: Checkout
@@ -108,7 +107,6 @@ jobs:
           $version = $wails.info.productVersion
           if ([string]::IsNullOrWhiteSpace($version)) { throw 'Missing productVersion in desktop/wails.json' }
           "TUNFLOW_VERSION=$version" >> $env:GITHUB_ENV
-          Write-Host "Version: $version"
 
       - name: Add version metadata
         shell: powershell
