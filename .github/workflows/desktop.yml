@@ -1,0 +1,59 @@
+name: Desktop Build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'desktop/**'
+      - 'engine/**'
+      - 'routing/**'
+      - 'tunnel/**'
+      - 'core/**'
+      - 'proxy/**'
+      - 'metadata/**'
+      - 'dialer/**'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/desktop.yml'
+  pull_request:
+    paths:
+      - 'desktop/**'
+      - 'engine/**'
+      - 'routing/**'
+      - 'tunnel/**'
+      - 'core/**'
+      - 'proxy/**'
+      - 'metadata/**'
+      - 'dialer/**'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/desktop.yml'
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.26.x'
+          cache-dependency-path: desktop/go.mod
+
+      - name: Download dependencies
+        working-directory: desktop
+        run: go mod tidy
+
+      - name: Build desktop
+        working-directory: desktop
+        env:
+          CGO_ENABLED: '1'
+        run: go build -trimpath -ldflags "-s -w" -o TunFlow.exe .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TunFlow-windows-amd64
+          path: desktop/TunFlow.exe
