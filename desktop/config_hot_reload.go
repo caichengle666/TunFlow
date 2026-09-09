@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"os"
 	"reflect"
 	"time"
 
@@ -39,8 +40,7 @@ func (a *App) configWatchLoop(stop <-chan struct{}) {
 }
 
 func (a *App) reloadConfigFromDisk() {
-	path := a.configPath()
-	data, err := readConfigFile(path)
+	data, err := os.ReadFile(a.configPath())
 	if err != nil {
 		return
 	}
@@ -57,6 +57,7 @@ func (a *App) reloadConfigFromDisk() {
 	if err := json.Unmarshal(data, &cfg); err != nil || cfg.Proxy == "" || cfg.Device == "" {
 		return
 	}
+
 	// Normalize without mutating the live config until the new configuration
 	// has passed the same normalization path as normal GUI saves.
 	tmp := &App{cfg: cfg}
