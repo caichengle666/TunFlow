@@ -42,18 +42,39 @@ var (
 	_icmpHandler adapter.NetworkHandler
 )
 
-// Start starts the default engine up.
+// Start starts the default engine up and terminates the process on failure.
+// It is kept for CLI compatibility.
 func Start() {
-	if err := start(); err != nil {
+	if err := StartE(); err != nil {
 		log.Fatalf("[ENGINE] failed to start: %v", err)
 	}
 }
 
-// Stop shuts the default engine down.
+// StartE starts the default engine and returns an error instead of terminating
+// the process. Desktop frontends and embedded controllers should use this API.
+func StartE() error {
+	return start()
+}
+
+// Stop shuts the default engine down and terminates the process on failure.
+// It is kept for CLI compatibility.
 func Stop() {
-	if err := stop(); err != nil {
+	if err := StopE(); err != nil {
 		log.Fatalf("[ENGINE] failed to stop: %v", err)
 	}
+}
+
+// StopE shuts the default engine down and returns an error to the caller.
+func StopE() error {
+	return stop()
+}
+
+// Running reports whether the default engine has an active TUN device and
+// networking stack.
+func Running() bool {
+	_engineMu.Lock()
+	defer _engineMu.Unlock()
+	return _defaultDevice != nil && _defaultStack != nil
 }
 
 // Insert loads *Key to the default engine.
@@ -94,10 +115,12 @@ func stop() (err error) {
 	_engineMu.Lock()
 	if _defaultDevice != nil {
 		_defaultDevice.Close()
+		_defaultDevice = nil
 	}
 	if _defaultStack != nil {
 		_defaultStack.Close()
 		_defaultStack.Wait()
+		_defaultStack = nil
 	}
 	_engineMu.Unlock()
 	return nil
