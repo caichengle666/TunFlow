@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"fyne.io/systray"
@@ -18,6 +19,7 @@ const trayIconBase64 = "AAABAAIAEBAAAAAAIABjAgAAJgAAACAgAAAAACAA8gAAAIkCAACJUE5H
 var (
 	trayOnce     sync.Once
 	trayActionMu sync.Mutex
+	trayBusy     atomic.Bool
 )
 
 func formatBytes(v int64) string {
@@ -80,6 +82,7 @@ func (a *App) startSystemTray() {
 			go func() {
 				ticker := time.NewTicker(time.Second)
 				defer ticker.Stop()
+				running := false
 				for range ticker.C {
 					stats := a.GetTrafficStats()
 					status := a.GetStatus()
@@ -88,13 +91,17 @@ func (a *App) startSystemTray() {
 						title = "TunFlow · 运行中"
 					}
 					systray.SetTooltip(fmt.Sprintf("%s\n↓ %s/s   ↑ %s/s\n累计 ↓ %s   ↑ %s", title, formatBytes(stats.DownloadPerSecond), formatBytes(stats.UploadPerSecond), formatBytes(stats.DownloadTotal), formatBytes(stats.UploadTotal)))
-					startItem.Check()
-					if status.Running {
-						startItem.Uncheck()
-						stopItem.Check()
-					} else {
-						stopItem.Uncheck()
+					if status.Running == running {
+						continue
 					}
+					if status.Running {
+						startItem.Disable()
+						stopItem.Enable()
+					} else {
+						startItem.Enable()
+						stopItem.Disable()
+					}
+					running = status.Running
 				}
 			}()
 		}, func() {})
@@ -106,6 +113,10 @@ func (a *App) startSystemTray() {
 func (a *App) runTrayAction(action func()) {
 	trayActionMu.Lock()
 	defer trayActionMu.Unlock()
+	if !trayBusy.CompareAndSwap(false, true) {
+		return
+	}
+	defer trayBusy.Store(false)
 	action()
 }
 

@@ -15,7 +15,7 @@ import (
 	"github.com/xjasonlyu/tun2socks/v2/engine"
 )
 
-const configWatchInterval = 500 * time.Millisecond
+const configWatchInterval = 2 * time.Second
 
 func (a *App) startConfigWatcherLocked() {
 	if a.configWatchStop != nil {
@@ -86,6 +86,22 @@ func (a *App) reloadConfigFromDisk() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if checksum == a.configDiskChecksum {
+		return
+	}
+
+	// Read a stable snapshot twice so an editor writing the file is not
+	// treated as a finished change; the next tick will pick up the final data.
+	path = a.configPath()
+	cfg2, data2, err2 := readConfigFile(path)
+	if err2 != nil {
+		return
+	}
+	sum2 := sha256.Sum256(data2)
+	checksum2 := hex.EncodeToString(sum2[:])
+	if checksum2 != checksum {
+		return
+	}
+	if !reflect.DeepEqual(cfg, cfg2) {
 		return
 	}
 

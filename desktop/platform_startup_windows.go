@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-const startupRunKey = `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`
+const startupRunKey = `HKLM\Software\Microsoft\Windows\CurrentVersion\Run`
 
 func setStartWithWindows(enabled bool) error {
 	name := "TunFlow"

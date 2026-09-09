@@ -69,7 +69,7 @@ const (
 
 func NewApp() *App {
 	return &App{cfg: Config{
-		Proxy:            "",
+		Proxy:            "socks5://127.0.0.1:1080",
 		Device:           "tun://TunFlow",
 		Mode:             "global",
 		DirectCIDRs:      []string{},
