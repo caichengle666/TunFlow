@@ -59,14 +59,14 @@ func interfaceIndex(name string) (string, error) {
 	}
 	for _, line := range strings.Split(string(out), "\n") {
 		fields := strings.Fields(line)
-		if len(fields) < 4 {
+		if len(fields) < 5 {
 			continue
 		}
 		idx := fields[0]
 		if _, err := strconv.Atoi(idx); err != nil {
 			continue
 		}
-		if strings.EqualFold(strings.TrimSpace(strings.Join(fields[3:], " ")), name) {
+		if strings.EqualFold(strings.TrimSpace(strings.Join(fields[4:], " ")), name) {
 			return idx, nil
 		}
 	}
