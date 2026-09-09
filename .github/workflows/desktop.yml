@@ -75,14 +75,24 @@ jobs:
           Invoke-WebRequest 'https://raw.githubusercontent.com/caichengle666/x-tunnel/main/geoip.dat' -OutFile 'desktop/build/bin/geoip.dat'
           Invoke-WebRequest 'https://raw.githubusercontent.com/caichengle666/x-tunnel/main/geosite.dat' -OutFile 'desktop/build/bin/geosite.dat'
 
+      - name: Read release version
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $wails = Get-Content 'desktop/wails.json' -Raw | ConvertFrom-Json
+          $version = $wails.info.productVersion
+          if ([string]::IsNullOrWhiteSpace($version)) { throw 'Missing productVersion in desktop/wails.json' }
+          "TUNFLOW_VERSION=$version" >> $env:GITHUB_ENV
+          "Version: $version"
+
       - name: Add version metadata
         shell: powershell
         run: |
-          $version = (Get-Content 'desktop/wails.json' -Raw | ConvertFrom-Json).info.productVersion
+          $ErrorActionPreference = 'Stop'
           $exe = 'desktop/build/bin/TunFlow.exe'
-          "TunFlow $version" | Out-File -Encoding utf8 (Join-Path $env:RUNNER_TEMP 'version.txt')
+          if (-not (Test-Path $exe)) { throw 'TunFlow.exe not found' }
+          "TunFlow $env:TUNFLOW_VERSION" | Out-File -Encoding utf8 'desktop/build/bin/VERSION.txt'
           Get-Item $exe | Format-List Name,Length,LastWriteTime
-          "Version: $version" | Out-File -Encoding utf8 'desktop/build/bin/VERSION.txt'
 
       - name: Smoke check packaged files
         shell: powershell
@@ -93,27 +103,34 @@ jobs:
           }
           Get-ChildItem desktop/build/bin | Format-Table Name,Length
 
-      - name: Upload artifact
+      - name: Create Windows release archive
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $archive = "TunFlow-v$env:TUNFLOW_VERSION-Windows-amd64.zip"
+          Compress-Archive -Path 'desktop/build/bin/*' -DestinationPath $archive -Force
+          "RELEASE_ARCHIVE=$archive" >> $env:GITHUB_ENV
+          Get-Item $archive | Format-List Name,Length,LastWriteTime
+
+      - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: TunFlow-windows-amd64
-          path: desktop/build/bin/
+          name: TunFlow-windows-amd64-v${{ env.TUNFLOW_VERSION }}
+          path: |
+            desktop/build/bin/
+            TunFlow-v${{ env.TUNFLOW_VERSION }}-Windows-amd64.zip
 
-      - name: Create release tag
+      - name: Publish GitHub Release
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         shell: powershell
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $version = (Get-Content 'desktop/wails.json' -Raw | ConvertFrom-Json).info.productVersion
-          $tag = "v$version"
-          git fetch --tags --force
-          $existing = git tag -l $tag
-          if ($existing) {
-            Write-Host "Tag $tag already exists; nothing to do."
-            exit 0
+          $ErrorActionPreference = 'Stop'
+          $tag = "v$env:TUNFLOW_VERSION"
+          $existing = gh release view $tag 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag $env:RELEASE_ARCHIVE --clobber
+          } else {
+            gh release create $tag $env:RELEASE_ARCHIVE --target $env:GITHUB_SHA --title "TunFlow $tag" --generate-notes
           }
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git tag -a $tag $env:GITHUB_SHA -m "TunFlow $tag"
-          git push origin $tag
