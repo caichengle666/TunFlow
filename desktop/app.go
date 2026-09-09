@@ -5,10 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/xjasonlyu/tun2socks/v2/engine"
 )
@@ -43,6 +46,11 @@ type Status struct {
 	RouteReady       bool   `json:"routeReady"`
 	StartWithWindows bool   `json:"startWithWindows"`
 }
+
+const (
+	geoIPDownloadURL   = "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat"
+	geoSiteDownloadURL = "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat"
+)
 
 func NewApp() *App {
 	return &App{cfg: Config{
@@ -100,6 +108,95 @@ func (a *App) GetStatus() Status {
 
 func (a *App) GetTrafficStats() engine.TrafficStats {
 	return engine.GetTrafficStats()
+}
+
+func (a *App) UpdateRuleFiles() error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	dir, err := executableDir()
+	if err != nil {
+		return err
+	}
+	client := &http.Client{Timeout: 2 * time.Minute}
+	geoIPTemp, err := downloadRuleFile(client, geoIPDownloadURL, dir, "geoip.dat")
+	if err != nil {
+		return fmt.Errorf("更新 GeoIP 失败: %w", err)
+	}
+	defer os.Remove(geoIPTemp)
+	geoSiteTemp, err := downloadRuleFile(client, geoSiteDownloadURL, dir, "geosite.dat")
+	if err != nil {
+		return fmt.Errorf("更新 GeoSite 失败: %w", err)
+	}
+	defer os.Remove(geoSiteTemp)
+
+	if err := replaceRuleFile(geoIPTemp, filepath.Join(dir, "geoip.dat")); err != nil {
+		return fmt.Errorf("替换 GeoIP 文件失败: %w", err)
+	}
+	if err := replaceRuleFile(geoSiteTemp, filepath.Join(dir, "geosite.dat")); err != nil {
+		return fmt.Errorf("替换 GeoSite 文件失败: %w", err)
+	}
+	return nil
+}
+
+func executableDir() (string, error) {
+	exe, err := os.Executable()
+	if err != nil {
+		return "", fmt.Errorf("获取程序目录失败: %w", err)
+	}
+	return filepath.Dir(exe), nil
+}
+
+func downloadRuleFile(client *http.Client, source, dir, name string) (string, error) {
+	response, err := client.Get(source)
+	if err != nil {
+		return "", err
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("HTTP 状态码 %d", response.StatusCode)
+	}
+
+	temp, err := os.CreateTemp(dir, "."+name+".tmp-*")
+	if err != nil {
+		return "", err
+	}
+	tempName := temp.Name()
+	defer func() {
+		if err != nil {
+			_ = os.Remove(tempName)
+		}
+	}()
+	if _, err = io.Copy(temp, response.Body); err != nil {
+		_ = temp.Close()
+		return "", err
+	}
+	if err = temp.Close(); err != nil {
+		return "", err
+	}
+	info, err := os.Stat(tempName)
+	if err != nil {
+		return "", err
+	}
+	if info.Size() == 0 {
+		return "", errors.New("下载文件为空")
+	}
+	return tempName, nil
+}
+
+func replaceRuleFile(source, target string) error {
+	backup := target + ".bak"
+	if err := os.Remove(backup); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	if err := os.Rename(target, backup); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	if err := os.Rename(source, target); err != nil {
+		_ = os.Rename(backup, target)
+		return err
+	}
+	return os.Remove(backup)
 }
 
 func (a *App) SaveConfig(cfg Config) error {
