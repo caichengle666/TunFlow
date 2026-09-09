@@ -8,3 +8,4 @@ func (a *App) ShowWindow() {}
 func (a *App) MinimizeToTray() {}
 func (a *App) CloseToTray() {}
 func (a *App) QuitApp() {}
+func (a *App) ToggleMaximize() {}
