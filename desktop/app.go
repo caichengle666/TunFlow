@@ -59,10 +59,10 @@ func (a *App) shutdown(ctx context.Context) {
 	_ = ctx
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	if engine.Running() {
+	if engine.Running() || a.up.active {
 		_ = a.stopLocked()
 	}
-	a.saveLocked()
+	_ = a.saveLocked()
 }
 
 func (a *App) GetConfig() Config {
@@ -92,6 +92,11 @@ func (a *App) SaveConfig(cfg Config) error {
 	}
 	if strings.TrimSpace(cfg.Device) == "" {
 		return errors.New("TUN 设备不能为空")
+	}
+	switch cfg.Mode {
+	case "", "global", "bypass", "direct":
+	default:
+		return fmt.Errorf("不支持的分流模式: %s", cfg.Mode)
 	}
 	if cfg.Mode == "" {
 		cfg.Mode = "global"
@@ -146,12 +151,16 @@ func (a *App) Stop() error {
 }
 
 func (a *App) stopLocked() error {
+	var firstErr error
 	if a.up.active {
 		if err := a.teardownRoutesLocked(); err != nil {
-			return err
+			firstErr = err
 		}
 	}
-	return engine.StopE()
+	if err := engine.StopE(); err != nil && firstErr == nil {
+		firstErr = err
+	}
+	return firstErr
 }
 
 func (a *App) configPath() string {
