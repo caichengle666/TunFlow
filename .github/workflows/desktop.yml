@@ -1,6 +1,6 @@
 name: Desktop Build
 
-"on":
+on:
   push:
     branches:
       - main
