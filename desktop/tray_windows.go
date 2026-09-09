@@ -13,16 +13,14 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-const trayIconBase64 = "AAABAAIAEBAAAAAAIABjAgAAJgAAACAgAAAAACAA8gAAAIkCAACJUE5HDQoaCgAAAA1JSERSAAAAEAAA" +
-	"AAABAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+const trayIconBase64 = "AAABAAIAEBAAAAAAIABjAgAAJgAAACAgAAAAACAA8gAAAIkCAACJUE5HDQoaCgAAAA1JSERSAAAAEAAAABAIBgAAAB/z/2EAAAIqSURBVHicfZO/axRBGIafb3Zn7/a8PU0uF0lOECux0MreLmCKgAEFSyurINgJsRX8C7TVv8BeC9OoRSBgkyIEwQMLSaJ3ZM/czux8FnuXcOZwYIr58T7z8b7fSNbqKLOGyPRaZ1+LZwnFGELhgLFIQWyMGEHL8B+ACIRA0R9Qv9xBjEFVkSjC/fqNHxXYVoaW5QyACKFwRInl+tPHdO+tYuIIDQFTSxjs7rH/+i2Hn7exrRYaqkoka3V08rJEhlsvn7O8tkJxcAQCUJ1FjZTgPTsbm/zc+kTUaEAIGACJDP74mGuPHrK8tsKf3g+0LFFfot6jqrj+AELg5otn1BfaqHMggkGEMCqoLXborq9SHBxhElv5MZmAxDHl8IRkYY7u+l18niORqSqoLBDExufjO41RQA1ChFg7w0TVKXf/FYv1YB2SujNvTgHjqKJa7dTdKXHN4XoLuN4FdDmlzEcoHhAMqoiNKfp9Brt7xI30rBIFrMd9bzP8cIPR16vkHxepDx9gmy3Ul+MUjKEcFey/ekPwnihNUedRF4AC18sII8U0PRoFsqU72MY8GooKoGXAZhmHX7bZ2djE50OS9hxJZ45kfp569yJxaiDEmMgQwgnBjwAzbqRJEsbg8yG1Tpsr66uItYgoZV5QG94nW7pNKB3f3j/haO8dJmlOAyaQ4Bw+zyc7KB7bbBGnl9CyxJ8cYuIGoOcB46ZAIjOOSiuI92jw499qQau0/gLFHPjk4UMw1AAAAABJRU5ErkJggolQTkcNChoKAAAADUlIRFIAAAAgAAAAIAgGAAAAc3p69AAAALlJREFUeJxj5OUT/c8wgIBpIC0fdcCoAxgYGBhYSNXgdHgDQTX7bAOINo+R2GxIjMXkOISoKCDHcmL1EXQAuZYTqx+vAyi1nBhzBjwX4HQAtXxPyLzBGwKjDhh1AL0AyZURMeDTcisMMb7IY1jVUj0EsFmOTxynA0ipUglZAgMmWa+IdwC9AF4HkBMKVHUAPRxBVBTQ0hFEN8lggFAtiS8hnpkmRrkDiAHYUjs2y2nmAFLA4M6GI8IBABYFMQA/6VKcAAAAAElFTkSuQmCC"
 
 var trayOnce sync.Once
 
 func (a *App) startSystemTray() {
 	trayOnce.Do(func() {
 		go systray.Run(func() {
-			icon, err := base64.StdEncoding.DecodeString(trayIconBase64)
-			if err == nil {
+			if icon, err := base64.StdEncoding.DecodeString(trayIconBase64); err == nil {
 				systray.SetIcon(icon)
 			}
 			systray.SetTooltip("TunFlow")
@@ -55,7 +53,7 @@ func (a *App) startSystemTray() {
 }
 
 func (a *App) updateTrayLoop(startItem, stopItem *systray.MenuItem) {
-	t := time.NewTicker(1 * time.Second)
+	t := time.NewTicker(time.Second)
 	defer t.Stop()
 	for range t.C {
 		if a.ctx == nil {
@@ -67,7 +65,7 @@ func (a *App) updateTrayLoop(startItem, stopItem *systray.MenuItem) {
 		if s.Running {
 			title = "TunFlow · 运行中"
 		}
-		systray.SetTooltip(fmt.Sprintf("%s\n↓ %s/s   ↑ %s/s\n累计 ↓ %s   ↑ %s", title, formatBytes(stats.DownloadSpeed), formatBytes(stats.UploadSpeed), formatBytes(stats.Download), formatBytes(stats.Upload)))
+		systray.SetTooltip(fmt.Sprintf("%s\n↓ %s/s   ↑ %s/s\n累计 ↓ %s   ↑ %s", title, formatBytes(stats.DownloadPerSecond), formatBytes(stats.UploadPerSecond), formatBytes(stats.DownloadTotal), formatBytes(stats.UploadTotal)))
 		startItem.Check(!s.Running)
 		stopItem.Check(s.Running)
 	}
@@ -100,18 +98,20 @@ func (a *App) QuitApp() {
 	}
 }
 
-func formatBytes(v uint64) string {
-	const unit = 1024
+func formatBytes(v int64) string {
+	if v < 0 {
+		v = 0
+	}
+	const unit = int64(1024)
 	if v < unit {
 		return fmt.Sprintf("%d B", v)
 	}
 	value := float64(v)
-	units := []string{"KB", "MB", "GB", "TB"}
-	for _, u := range units {
-		value /= unit
-		if value < unit {
+	for _, u := range []string{"KB", "MB", "GB", "TB"} {
+		value /= float64(unit)
+		if value < float64(unit) {
 			return fmt.Sprintf("%.1f %s", value, u)
 		}
 	}
-	return fmt.Sprintf("%.1f PB", value/unit)
+	return fmt.Sprintf("%.1f PB", value/float64(unit))
 }
