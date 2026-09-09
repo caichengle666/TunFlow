@@ -77,6 +77,27 @@ jobs:
           Invoke-WebRequest 'https://raw.githubusercontent.com/caichengle666/x-tunnel/main/geoip.dat' -OutFile 'desktop/build/bin/geoip.dat'
           Invoke-WebRequest 'https://raw.githubusercontent.com/caichengle666/x-tunnel/main/geosite.dat' -OutFile 'desktop/build/bin/geosite.dat'
 
+      - name: Create portable config
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $config = @'
+{
+  "proxy": "",
+  "device": "tun://TunFlow",
+  "interface": "",
+  "mode": "global",
+  "directCIDRs": [],
+  "directRules": [],
+  "proxyRules": [],
+  "defaultRoute": "proxy",
+  "geoIPFile": "geoip.dat",
+  "autoRoute": true,
+  "startWithWindows": false
+}
+'@
+          Set-Content -Path 'desktop/build/bin/config.json' -Value $config -Encoding utf8
+
       - name: Read release version
         shell: powershell
         run: |
@@ -99,7 +120,7 @@ jobs:
       - name: Smoke check packaged files
         shell: powershell
         run: |
-          $required = @('desktop/build/bin/TunFlow.exe','desktop/build/bin/wintun.dll','desktop/build/bin/geoip.dat','desktop/build/bin/geosite.dat','desktop/build/bin/VERSION.txt')
+          $required = @('desktop/build/bin/TunFlow.exe','desktop/build/bin/wintun.dll','desktop/build/bin/geoip.dat','desktop/build/bin/geosite.dat','desktop/build/bin/VERSION.txt','desktop/build/bin/config.json')
           foreach ($file in $required) {
             if (-not (Test-Path $file)) { throw "Missing artifact: $file" }
           }
