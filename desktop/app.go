@@ -68,21 +68,18 @@ const (
 )
 
 func NewApp() *App {
-	app := &App{
-		cfg: Config{
-			Proxy:            "socks5://127.0.0.1:1080",
-			Device:           "tun://TunFlow",
-			Mode:             "global",
-			DirectCIDRs:      []string{},
-			DirectRules:      []string{},
-			ProxyRules:       []string{},
-			DefaultRoute:     "proxy",
-			GeoIPFile:        "geoip.dat",
-			AutoRoute:        true,
-			StartWithWindows: false,
-		},
-	}
-	return app
+	return &App{cfg: Config{
+		Proxy:            "socks5://127.0.0.1:1080",
+		Device:           "tun://TunFlow",
+		Mode:             "global",
+		DirectCIDRs:      []string{},
+		DirectRules:      []string{},
+		ProxyRules:       []string{},
+		DefaultRoute:     "proxy",
+		GeoIPFile:        "geoip.dat",
+		AutoRoute:        true,
+		StartWithWindows: false,
+	}}
 }
 
 func (a *App) startup(ctx context.Context) {
@@ -257,6 +254,34 @@ func replaceRuleFile(source, target string) error {
 func (a *App) SaveConfig(cfg Config) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	if err := validateAndNormalizeConfig(&cfg); err != nil {
+		return err
+	}
+	if err := setStartWithWindows(cfg.StartWithWindows); err != nil {
+		return err
+	}
+	oldCfg := a.cfg
+	running := engine.Running()
+	a.cfg = cfg
+	if err := a.saveLocked(); err != nil {
+		a.cfg = oldCfg
+		_ = setStartWithWindows(oldCfg.StartWithWindows)
+		return err
+	}
+	if running {
+		if err := a.applyRunningConfigLocked(oldCfg); err != nil {
+			_ = setStartWithWindows(oldCfg.StartWithWindows)
+			a.cfg = oldCfg
+			_ = a.saveLocked()
+			a.err = err
+			return err
+		}
+	}
+	a.err = nil
+	return nil
+}
+
+func validateAndNormalizeConfig(cfg *Config) error {
 	if strings.TrimSpace(cfg.Proxy) == "" {
 		return errors.New("SOCKS5 地址不能为空")
 	}
@@ -289,26 +314,6 @@ func (a *App) SaveConfig(cfg Config) error {
 	if cfg.GeoIPFile == "" {
 		cfg.GeoIPFile = "geoip.dat"
 	}
-	if err := setStartWithWindows(cfg.StartWithWindows); err != nil {
-		return err
-	}
-	oldCfg := a.cfg
-	running := engine.Running()
-	a.cfg = cfg
-	if err := a.saveLocked(); err != nil {
-		a.cfg = oldCfg
-		return err
-	}
-	if running {
-		if err := a.applyRunningConfigLocked(oldCfg); err != nil {
-			_ = setStartWithWindows(oldCfg.StartWithWindows)
-			a.cfg = oldCfg
-			_ = a.saveLocked()
-			a.err = err
-			return err
-		}
-	}
-	a.err = nil
 	return nil
 }
 
@@ -318,6 +323,21 @@ func (a *App) Start() error {
 	err := a.startLocked()
 	a.err = err
 	return err
+}
+
+func (a *App) buildEngineKeyLocked(cfg Config) *engine.Key {
+	return &engine.Key{
+		Proxy:        strings.TrimSpace(cfg.Proxy),
+		Device:       strings.TrimSpace(cfg.Device),
+		Interface:    strings.TrimSpace(cfg.Interface),
+		RoutingMode:  strings.TrimSpace(cfg.Mode),
+		DirectCIDRs:  append([]string(nil), cfg.DirectCIDRs...),
+		DirectRules:  append([]string(nil), cfg.DirectRules...),
+		ProxyRules:   append([]string(nil), cfg.ProxyRules...),
+		DefaultRoute: cfg.DefaultRoute,
+		GeoIPFile:    cfg.GeoIPFile,
+		LogLevel:     "info",
+	}
 }
 
 func (a *App) startLocked() error {
@@ -334,19 +354,7 @@ func (a *App) startLocked() error {
 	if err := checkProxyEndpoint(a.cfg.Proxy); err != nil {
 		return err
 	}
-	key := &engine.Key{
-		Proxy:        strings.TrimSpace(a.cfg.Proxy),
-		Device:       strings.TrimSpace(a.cfg.Device),
-		Interface:    strings.TrimSpace(a.cfg.Interface),
-		RoutingMode:  strings.TrimSpace(a.cfg.Mode),
-		DirectCIDRs:  append([]string(nil), a.cfg.DirectCIDRs...),
-		DirectRules:  append([]string(nil), a.cfg.DirectRules...),
-		ProxyRules:   append([]string(nil), a.cfg.ProxyRules...),
-		DefaultRoute: a.cfg.DefaultRoute,
-		GeoIPFile:    a.cfg.GeoIPFile,
-		LogLevel:     "info",
-	}
-	engine.Insert(key)
+	engine.Insert(a.buildEngineKeyLocked(a.cfg))
 	if err := engine.StartE(); err != nil {
 		return fmt.Errorf("启动核心失败: %w", err)
 	}
@@ -379,25 +387,83 @@ func (a *App) stopLocked() (firstErr error) {
 	return firstErr
 }
 
+func (a *App) applyRunningConfigLocked(oldCfg Config) error {
+	if !engine.Running() {
+		return nil
+	}
+	newCfg := a.cfg
+	if oldCfg.Device != newCfg.Device || oldCfg.Interface != newCfg.Interface {
+		if err := a.stopLocked(); err != nil {
+			return fmt.Errorf("应用新配置前停止旧核心失败: %w", err)
+		}
+		if err := a.startLocked(); err != nil {
+			_ = a.startWithConfigLocked(oldCfg)
+			return fmt.Errorf("应用新配置失败: %w", err)
+		}
+		return nil
+	}
+
+	oldRoute := a.up
+	routeNeedsRebuild := oldCfg.AutoRoute && newCfg.AutoRoute && oldCfg.Proxy != newCfg.Proxy
+	if !newCfg.AutoRoute && oldRoute.active {
+		if err := a.teardownRoutesLocked(); err != nil {
+			return fmt.Errorf("关闭 Windows 自动路由失败: %w", err)
+		}
+	}
+	if routeNeedsRebuild {
+		if err := a.teardownRoutesLocked(); err != nil {
+			return fmt.Errorf("重建 SOCKS5 防环路由失败: %w", err)
+		}
+	}
+	if err := engine.Reload(a.buildEngineKeyLocked(newCfg)); err != nil {
+		if routeNeedsRebuild || (oldRoute.active && !newCfg.AutoRoute) {
+			if a.up.active {
+				_ = a.teardownRoutesLocked()
+			}
+			a.cfg = oldCfg
+			if oldCfg.AutoRoute {
+				_ = a.setupRoutesLocked()
+			}
+		}
+		a.cfg = newCfg
+		return fmt.Errorf("热更新核心配置失败: %w", err)
+	}
+
+	if newCfg.AutoRoute && !oldRoute.active {
+		if err := a.setupRoutesLocked(); err != nil {
+			_ = engine.Reload(a.buildEngineKeyLocked(oldCfg))
+			a.cfg = oldCfg
+			if oldCfg.AutoRoute {
+				_ = a.setupRoutesLocked()
+			}
+			return fmt.Errorf("启用 Windows 自动路由失败: %w", err)
+		}
+	}
+	if routeNeedsRebuild {
+		if err := a.setupRoutesLocked(); err != nil {
+			_ = engine.Reload(a.buildEngineKeyLocked(oldCfg))
+			a.cfg = oldCfg
+			if oldCfg.AutoRoute {
+				_ = a.setupRoutesLocked()
+			}
+			return fmt.Errorf("重建 Windows 路由失败: %w", err)
+		}
+	}
+	return nil
+}
+
+func (a *App) startWithConfigLocked(cfg Config) error {
+	saved := a.cfg
+	a.cfg = cfg
+	err := a.startLocked()
+	if err != nil {
+		a.cfg = saved
+	}
+	return err
+}
+
 func (a *App) normalizeConfigLocked() {
-	if a.cfg.Mode == "bypass" {
-		a.cfg.Mode = "rules"
-	}
-	if a.cfg.Mode == "" {
-		a.cfg.Mode = "global"
-	}
-	if a.cfg.DefaultRoute != "direct" && a.cfg.DefaultRoute != "proxy" {
-		a.cfg.DefaultRoute = "proxy"
-	}
-	if a.cfg.DirectRules == nil {
-		a.cfg.DirectRules = []string{}
-	}
-	if a.cfg.ProxyRules == nil {
-		a.cfg.ProxyRules = []string{}
-	}
-	if a.cfg.GeoIPFile == "" {
-		a.cfg.GeoIPFile = "geoip.dat"
-	}
+	_ = validateAndNormalizeConfig(&a.cfg)
 	if path, ok := bundledDataPath(a.cfg.GeoIPFile); ok {
 		a.cfg.GeoIPFile = path
 	}
@@ -463,30 +529,6 @@ func (a *App) refreshConfigDiskChecksumLocked() {
 	}
 	sum := sha256.Sum256(data)
 	a.configDiskChecksum = hex.EncodeToString(sum[:])
-}
-
-func (a *App) applyRunningConfigLocked(oldCfg Config) error {
-	if !engine.Running() {
-		return nil
-	}
-	if err := a.stopLocked(); err != nil {
-		return fmt.Errorf("应用新配置前停止旧核心失败: %w", err)
-	}
-	if err := a.startLocked(); err != nil {
-		_ = a.startWithConfigLocked(oldCfg)
-		return fmt.Errorf("应用新配置失败: %w", err)
-	}
-	return nil
-}
-
-func (a *App) startWithConfigLocked(cfg Config) error {
-	saved := a.cfg
-	a.cfg = cfg
-	err := a.startLocked()
-	if err != nil {
-		a.cfg = saved
-	}
-	return err
 }
 
 func errString(err error) string {
