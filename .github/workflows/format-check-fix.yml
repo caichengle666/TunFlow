@@ -1,0 +1,37 @@
+name: Format fix
+
+on:
+  push:
+    branches:
+      - fix/windows-network-hardening
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/windows-network-hardening
+          fetch-depth: 0
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Install gofumpt
+        run: go install mvdan.cc/gofumpt@v0.7.0
+      - name: Format
+        run: gofumpt -w engine/engine.go routing/routing.go
+      - name: Commit formatting fixes
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo "No formatting changes needed."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add engine/engine.go routing/routing.go
+          git commit -m "style: format Go files with gofumpt"
+          git push origin HEAD:fix/windows-network-hardening

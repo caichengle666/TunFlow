@@ -30,6 +30,8 @@ type App struct {
 	configWatchStop    chan struct{}
 	configWatchWG      sync.WaitGroup
 	configDiskChecksum string
+	routeMonitorStop   chan struct{}
+	routeMonitorWG     sync.WaitGroup
 }
 
 type Config struct {
@@ -93,6 +95,7 @@ func (a *App) startup(ctx context.Context) {
 	}
 	a.refreshConfigDiskChecksumLocked()
 	a.startConfigWatcherLocked()
+	a.startRouteMonitorLocked()
 	a.startSystemTray()
 }
 
@@ -104,6 +107,11 @@ func (a *App) shutdown(ctx context.Context) {
 	if watchStop != nil {
 		close(watchStop)
 	}
+	routeMonitorStop := a.routeMonitorStop
+	a.routeMonitorStop = nil
+	if routeMonitorStop != nil {
+		close(routeMonitorStop)
+	}
 	trayEnd := a.trayEnd
 	a.trayEnd = nil
 	if engine.Running() || a.up.active {
@@ -114,6 +122,7 @@ func (a *App) shutdown(ctx context.Context) {
 	if watchStop != nil {
 		a.configWatchWG.Wait()
 	}
+	a.routeMonitorWG.Wait()
 	if trayEnd != nil {
 		trayEnd()
 	}
@@ -158,7 +167,7 @@ func (a *App) GetStatus() Status {
 		Device:           a.cfg.Device,
 		Mode:             a.cfg.Mode,
 		AutoRoute:        a.cfg.AutoRoute,
-		RouteReady:       a.up.active,
+		RouteReady:       a.up.ready,
 		LastError:        errString(a.err),
 		StartWithWindows: a.cfg.StartWithWindows,
 	}
@@ -274,8 +283,6 @@ func (a *App) SaveConfig(cfg Config) error {
 	if running {
 		if err := a.applyRunningConfigLocked(oldCfg); err != nil {
 			a.err = err
-			// Keep the saved proxy on disk even when the running engine cannot
-			// hot-reload. The user can stop/start to apply it cleanly.
 			return nil
 		}
 	}
@@ -331,7 +338,7 @@ func (a *App) buildEngineKeyLocked(cfg Config) *engine.Key {
 	return &engine.Key{
 		Proxy:        strings.TrimSpace(cfg.Proxy),
 		Device:       strings.TrimSpace(cfg.Device),
-		Interface:    strings.TrimSpace(cfg.Interface),
+		Interface:    a.effectiveEngineInterfaceLocked(cfg),
 		RoutingMode:  strings.TrimSpace(cfg.Mode),
 		DirectCIDRs:  append([]string(nil), cfg.DirectCIDRs...),
 		DirectRules:  append([]string(nil), cfg.DirectRules...),
@@ -362,9 +369,14 @@ func (a *App) startLocked() error {
 	}
 	if a.cfg.AutoRoute {
 		if err := a.setupRoutesLocked(); err != nil {
+			if a.up.active {
+				return err
+			}
 			_ = engine.StopE()
 			return err
 		}
+		a.up.engineInterface = a.effectiveEngineInterfaceLocked(a.cfg)
+		a.up.engineReloadPending = false
 	}
 	return nil
 }
@@ -380,13 +392,13 @@ func (a *App) Stop() error {
 func (a *App) stopLocked() (firstErr error) {
 	if a.up.active {
 		if err := a.teardownRoutesLocked(); err != nil {
-			firstErr = err
+			return err
 		}
 	}
-	if err := engine.StopE(); err != nil && firstErr == nil {
-		firstErr = err
+	if err := engine.StopE(); err != nil {
+		return err
 	}
-	return firstErr
+	return nil
 }
 
 func (a *App) applyRunningConfigLocked(oldCfg Config) error {
@@ -399,8 +411,18 @@ func (a *App) applyRunningConfigLocked(oldCfg Config) error {
 			return fmt.Errorf("应用新配置前停止旧核心失败: %w", err)
 		}
 		if err := a.startLocked(); err != nil {
-			_ = a.startWithConfigLocked(oldCfg)
-			return fmt.Errorf("应用新配置失败: %w", err)
+			if a.up.active {
+				if cleanupErr := a.teardownRoutesLocked(); cleanupErr != nil {
+					return fmt.Errorf("应用新配置失败，且清理失败: %v；原配置未能恢复: %w", cleanupErr, err)
+				}
+			}
+			if stopErr := engine.StopE(); stopErr != nil {
+				return fmt.Errorf("应用新配置失败，且无法停止失败的新核心: %v；原配置未能恢复: %w", stopErr, err)
+			}
+			if restoreErr := a.startWithConfigLocked(oldCfg); restoreErr != nil {
+				return fmt.Errorf("应用新配置失败: %v；恢复原配置也失败: %w", err, restoreErr)
+			}
+			return fmt.Errorf("应用新配置失败，已恢复原配置: %w", err)
 		}
 		return nil
 	}
@@ -455,6 +477,9 @@ func (a *App) applyRunningConfigLocked(oldCfg Config) error {
 }
 
 func (a *App) startWithConfigLocked(cfg Config) error {
+	if engine.Running() {
+		return errors.New("恢复配置前核心仍在运行")
+	}
 	saved := a.cfg
 	a.cfg = cfg
 	err := a.startLocked()

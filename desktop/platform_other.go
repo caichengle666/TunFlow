@@ -16,3 +16,5 @@ func (a *App) teardownRoutesLocked() error {
 	a.up = routeState{}
 	return nil
 }
+
+func (a *App) startRouteMonitorLocked() {}

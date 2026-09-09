@@ -1,0 +1,51 @@
+name: Temporary CI Repair
+
+on:
+  push:
+    branches: [fix/windows-network-hardening]
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: fix/windows-network-hardening
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Repair source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("desktop/platform_windows.go")
+          text = path.read_text()
+          if '"github.com/xjasonlyu/tun2socks/v2/engine"' not in text:
+              text = text.replace('\t"time"\n)', '\t"time"\n\n\t"github.com/xjasonlyu/tun2socks/v2/engine"\n)')
+              path.write_text(text)
+          PY
+          go run mvdan.cc/gofumpt@latest -w engine/engine.go routing/routing.go
+
+      - name: Commit repairs
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo "No repair changes needed."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add desktop/platform_windows.go engine/engine.go routing/routing.go
+          git commit -m "fix: repair CI compile and formatting"
+          git push origin HEAD:fix/windows-network-hardening

@@ -301,6 +301,7 @@ func (c *statsConn) Read(b []byte) (int, error) {
 	c.c.downloaded(n)
 	return n, err
 }
+
 func (c *statsConn) Write(b []byte) (int, error) {
 	n, err := c.Conn.Write(b)
 	c.c.uploaded(n)
@@ -313,6 +314,7 @@ func (c *statsConn) CloseRead() error {
 	}
 	return nil
 }
+
 func (c *statsConn) CloseWrite() error {
 	if v, ok := c.Conn.(interface{ CloseWrite() error }); ok {
 		return v.CloseWrite()
@@ -330,6 +332,7 @@ func (c *statsPacketConn) ReadFrom(b []byte) (int, net.Addr, error) {
 	c.c.downloaded(n)
 	return n, addr, err
 }
+
 func (c *statsPacketConn) WriteTo(b []byte, addr net.Addr) (int, error) {
 	n, err := c.PacketConn.WriteTo(b, addr)
 	c.c.uploaded(n)

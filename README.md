@@ -20,6 +20,8 @@ TunFlow / tun2socks 核心
 
 ## 当前进度
 
+当前修复版：0.1.3
+
 ### 核心
 
 底层仍然使用原项目的 gVisor TCP/IP 栈、TUN、TCP/UDP 和代理实现。
@@ -34,7 +36,9 @@ TunFlow / tun2socks 核心
 - CIDR 直连分流
 - Windows 自动设置 TUN IPv4 地址
 - Windows 自动添加 TUN 默认路由
-- 自动为远程 SOCKS5 地址添加防环路主机路由
+- 自动为远程 SOCKS5 地址添加物理网卡防环路主机路由（支持多 IPv4）
+- Windows 路由失败自动回滚，停止时先清理系统路由再停止核心
+- 网络切换与 SOCKS5 DNS 地址变化自动检测并恢复路由
 - 配置持久化
 - 中文桌面控制面板
 
@@ -72,7 +76,6 @@ go build -o TunFlow.exe .
 - GeoIP / GeoSite
 - DNS 防泄漏
 - IPv6 系统路由自动化
-- 网络切换自动恢复
 - Kill Switch
 - 应用/进程级分流
 - 系统托盘
