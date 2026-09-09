@@ -21,17 +21,17 @@ type App struct {
 }
 
 type Config struct {
-	Proxy           string   `json:"proxy"`
-	Device          string   `json:"device"`
-	Interface       string   `json:"interface"`
-	Mode            string   `json:"mode"`
-	DirectCIDRs     []string `json:"directCIDRs,omitempty"`
-	DirectRules     []string `json:"directRules,omitempty"`
-	ProxyRules      []string `json:"proxyRules,omitempty"`
-	DefaultRoute    string   `json:"defaultRoute"`
-	GeoIPFile       string   `json:"geoIPFile,omitempty"`
-	AutoRoute       bool     `json:"autoRoute"`
-	StartWithWindows bool    `json:"startWithWindows"`
+	Proxy            string   `json:"proxy"`
+	Device           string   `json:"device"`
+	Interface        string   `json:"interface"`
+	Mode             string   `json:"mode"`
+	DirectCIDRs      []string `json:"directCIDRs,omitempty"`
+	DirectRules      []string `json:"directRules,omitempty"`
+	ProxyRules       []string `json:"proxyRules,omitempty"`
+	DefaultRoute     string   `json:"defaultRoute"`
+	GeoIPFile        string   `json:"geoIPFile,omitempty"`
+	AutoRoute        bool     `json:"autoRoute"`
+	StartWithWindows bool     `json:"startWithWindows"`
 }
 
 type Status struct {
@@ -95,6 +95,10 @@ func (a *App) GetStatus() Status {
 		RouteReady:       a.up.active,
 		StartWithWindows: a.cfg.StartWithWindows,
 	}
+}
+
+func (a *App) GetTrafficStats() engine.TrafficStats {
+	return engine.GetTrafficStats()
 }
 
 func (a *App) SaveConfig(cfg Config) error {
