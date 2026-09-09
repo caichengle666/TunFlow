@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -282,6 +284,10 @@ func (a *App) startLocked() error {
 	}
 	a.normalizeConfigLocked()
 
+	if err := checkProxyEndpoint(a.cfg.Proxy); err != nil {
+		return err
+	}
+
 	key := &engine.Key{
 		Proxy:        strings.TrimSpace(a.cfg.Proxy),
 		Device:       strings.TrimSpace(a.cfg.Device),
@@ -312,6 +318,29 @@ func errString(err error) string {
 		return ""
 	}
 	return err.Error()
+}
+
+func checkProxyEndpoint(rawURL string) error {
+	proxyURL := rawURL
+	if !strings.Contains(proxyURL, "://") {
+		proxyURL = "socks5://" + proxyURL
+	}
+	parsed, err := url.Parse(proxyURL)
+	if err != nil {
+		return fmt.Errorf("SOCKS5 地址无效: %w", err)
+	}
+	host := parsed.Hostname()
+	port := parsed.Port()
+	if host == "" || port == "" {
+		return errors.New("SOCKS5 地址必须包含主机和端口")
+	}
+	address := net.JoinHostPort(host, port)
+	conn, err := net.DialTimeout("tcp", address, 3*time.Second)
+	if err != nil {
+		return fmt.Errorf("SOCKS5 入口不可达 %s: %w", address, err)
+	}
+	_ = conn.Close()
+	return nil
 }
 
 func (a *App) Stop() error {
