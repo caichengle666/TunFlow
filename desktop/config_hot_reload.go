@@ -71,6 +71,10 @@ func fmtConfigError(err error) error {
 	return errors.New("JSON 配置格式无效: " + err.Error())
 }
 
+func (a *App) configDiskChecksumLocked() string {
+	return a.configDiskChecksum
+}
+
 func (a *App) reloadConfigFromDisk() {
 	path := a.configPath()
 	cfg, data, err := readConfigFile(path)
@@ -102,6 +106,13 @@ func (a *App) reloadConfigFromDisk() {
 		return
 	}
 	if !reflect.DeepEqual(cfg, cfg2) {
+		return
+	}
+
+	// A watcher read can begin before SaveConfig acquires the lock. Re-read
+	// under the lock; otherwise the stale read would be treated as an
+	// external edit and roll back the configuration just saved by the GUI.
+	if currentChecksum := a.configDiskChecksumLocked(); currentChecksum != checksum {
 		return
 	}
 
