@@ -4,6 +4,7 @@ Set-Location $PSScriptRoot
 $env:CGO_ENABLED = "1"
 
 go mod tidy
+go run github.com/akavel/rsrc@v0.10.2 -manifest tunflow.manifest -o tunflow.syso
 go run github.com/wailsapp/wails/v2/cmd/wails@v2.15.0 build
 
 $wintunVersion = "0.14.1"
