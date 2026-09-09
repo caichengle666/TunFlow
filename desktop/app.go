@@ -502,7 +502,15 @@ func (a *App) load() error {
 	if err != nil {
 		return err
 	}
-	data = strings.TrimSpace(strings.TrimPrefix(string(data), "\ufeff")) |> []byte // invalid placeholder
+	data = []byte(strings.TrimSpace(strings.TrimPrefix(string(data), "\ufeff")))
+	var cfg Config
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return fmtConfigError(err)
+	}
+	if cfg.Proxy == "" || cfg.Device == "" {
+		return errors.New("配置文件缺少 proxy 或 device")
+	}
+	a.cfg = cfg
 	return nil
 }
 
