@@ -1,1 +1,14 @@
-TunFlow v0.1.1
+TunFlow Desktop 0.1.3
+
+Windows network hardening release.
+
+- Transactional Windows TUN/route setup with rollback on failure.
+- Preserve route cleanup state when route deletion fails.
+- Never stop the core while TunFlow-owned system routes remain active.
+- Restore the TUN IPv4 configuration on shutdown and failed setup.
+- Support all resolved IPv4 addresses for SOCKS5 hostname bypass routes.
+- Pin SOCKS5 bypass routes to the selected/active physical interface.
+- Select the best physical default route by interface and metric.
+- Automatically detect Windows network changes and SOCKS5 DNS address changes.
+- Automatically refresh the core's physical-interface binding after network changes.
+- Reject empty SOCKS5 addresses and fix short-address indexing safety.
