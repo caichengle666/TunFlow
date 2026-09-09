@@ -52,19 +52,37 @@ jobs:
           CGO_ENABLED: '1'
         run: go run github.com/wailsapp/wails/v2/cmd/wails@v2.15.0 build
 
-      - name: Download Wintun
-        working-directory: desktop
-        shell: pwsh
+      - name: Download and verify Wintun
+        shell: powershell
         run: |
-          $version = '0.14.1'
-          $archive = Join-Path $env:RUNNER_TEMP "wintun-$version.zip"
-          $extract = Join-Path $env:RUNNER_TEMP "wintun-$version"
-          Invoke-WebRequest "https://www.wintun.net/builds/wintun-$version.zip" -OutFile $archive
-          Expand-Archive -Path $archive -DestinationPath $extract -Force
-          Copy-Item "$extract/wintun/bin/amd64/wintun.dll" "build/bin/wintun.dll" -Force
+          $ErrorActionPreference = 'Stop'
+          $zip = Join-Path $env:RUNNER_TEMP 'wintun-0.14.1.zip'
+          Invoke-WebRequest 'https://www.wintun.net/builds/wintun-0.14.1.zip' -OutFile $zip
+          $expected = '07c256185d6ee3652e09fa55c0b673e2624b565e02c4b9091c79ca7d2f24ef51'
+          $actual = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
+          if ($actual -ne $expected) { throw "Wintun SHA256 mismatch: $actual" }
+          $extract = Join-Path $env:RUNNER_TEMP 'wintun'
+          Expand-Archive $zip -DestinationPath $extract -Force
+          Copy-Item (Join-Path $extract 'wintun/bin/amd64/wintun.dll') 'desktop/build/bin/wintun.dll' -Force
+
+      - name: Download GeoIP and GeoSite data
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Invoke-WebRequest 'https://raw.githubusercontent.com/caichengle666/x-tunnel/main/geoip.dat' -OutFile 'desktop/build/bin/geoip.dat'
+          Invoke-WebRequest 'https://raw.githubusercontent.com/caichengle666/x-tunnel/main/geosite.dat' -OutFile 'desktop/build/bin/geosite.dat'
+
+      - name: Smoke check packaged files
+        shell: powershell
+        run: |
+          $required = @('desktop/build/bin/TunFlow.exe','desktop/build/bin/wintun.dll','desktop/build/bin/geoip.dat','desktop/build/bin/geosite.dat')
+          foreach ($file in $required) {
+            if (-not (Test-Path $file)) { throw "Missing artifact: $file" }
+          }
+          Get-ChildItem desktop/build/bin | Format-Table Name,Length
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: TunFlow-windows-amd64
-          path: desktop/build/bin/*
+          path: desktop/build/bin/
