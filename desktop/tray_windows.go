@@ -20,6 +20,25 @@ var (
 	trayActionMu sync.Mutex
 )
 
+func formatBytes(v int64) string {
+	if v < 0 {
+		v = 0
+	}
+	const unit = int64(1024)
+	if v < unit {
+		return fmt.Sprintf("%d B", v)
+	}
+	value := float64(v)
+	units := []string{"KB", "MB", "GB", "TB"}
+	for _, u := range units {
+		value /= float64(unit)
+		if value < float64(unit) || u == units[len(units)-1] {
+			return fmt.Sprintf("%.1f %s", value, u)
+		}
+	}
+	return fmt.Sprintf("%d B", v)
+}
+
 func (a *App) startSystemTray() {
 	trayOnce.Do(func() {
 		startLoop, endLoop := systray.RunWithExternalLoop(func() {
