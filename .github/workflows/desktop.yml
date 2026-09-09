@@ -82,21 +82,7 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
-          $config = @'
-{
-  "proxy": "",
-  "device": "tun://TunFlow",
-  "interface": "",
-  "mode": "global",
-  "directCIDRs": [],
-  "directRules": [],
-  "proxyRules": [],
-  "defaultRoute": "proxy",
-  "geoIPFile": "geoip.dat",
-  "autoRoute": true,
-  "startWithWindows": false
-}
-'@
+          $config = '{"proxy":"","device":"tun://TunFlow","interface":"","mode":"global","directCIDRs":[],"directRules":[],"proxyRules":[],"defaultRoute":"proxy","geoIPFile":"geoip.dat","autoRoute":true,"startWithWindows":false}'
           Set-Content -Path 'desktop/build/bin/config.json' -Value $config -Encoding utf8
 
       - name: Read release version
