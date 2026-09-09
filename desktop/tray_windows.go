@@ -5,7 +5,6 @@ package main
 import (
 	"context"
 	"encoding/base64"
-	"fmt"
 	"sync"
 
 	"github.com/getlantern/systray"
@@ -27,6 +26,7 @@ func (a *App) startSystemTray() {
 			openItem := systray.AddMenuItem("打开 TunFlow", "打开控制台")
 			startItem := systray.AddMenuItem("启动 TUN", "启动 TunFlow")
 			stopItem := systray.AddMenuItem("停止 TUN", "停止 TunFlow")
+			stopItem.Disable()
 			systray.AddSeparator()
 			quitItem := systray.AddMenuItem("退出 TunFlow", "退出程序")
 
@@ -53,37 +53,17 @@ func (a *App) startSystemTray() {
 }
 
 func (a *App) updateTrayLoop(startItem, stopItem *systray.MenuItem) {
-	lastTooltip := ""
 	for range a.trayUpdates {
 		if a.ctx == nil {
 			continue
 		}
-		stats := a.GetTrafficStats()
 		s := a.GetStatus()
-		title := "TunFlow · 已停止"
 		if s.Running {
-			title = "TunFlow · 运行中"
-		}
-		tooltip := title
-		if s.Running {
-			tooltip += fmt.Sprintf(
-				"\n↓ %s/s   ↑ %s/s\n累计 ↓ %s   ↑ %s",
-				formatBytes(stats.DownloadPerSecond),
-				formatBytes(stats.UploadPerSecond),
-				formatBytes(stats.DownloadTotal),
-				formatBytes(stats.UploadTotal),
-			)
-		}
-		if tooltip == lastTooltip {
-			continue
-		}
-		systray.SetTooltip(tooltip)
-		if s.Running {
-			startItem.Uncheck()
-			stopItem.Check()
+			startItem.Disable()
+			stopItem.Enable()
 		} else {
-			startItem.Check()
-			stopItem.Uncheck()
+			startItem.Enable()
+			stopItem.Disable()
 		}
 	}
 }
@@ -126,22 +106,4 @@ func (a *App) QuitApp() {
 	if a.ctx != nil {
 		runtime.Quit(context.Background())
 	}
-}
-
-func formatBytes(v int64) string {
-	if v < 0 {
-		v = 0
-	}
-	const unit = int64(1024)
-	if v < unit {
-		return fmt.Sprintf("%d B", v)
-	}
-	value := float64(v)
-	for _, u := range []string{"KB", "MB", "GB", "TB"} {
-		value /= float64(unit)
-		if value < float64(unit) {
-			return fmt.Sprintf("%.1f %s", value, u)
-		}
-	}
-	return fmt.Sprintf("%.1f PB", value/float64(unit))
 }
