@@ -52,8 +52,19 @@ jobs:
           CGO_ENABLED: '1'
         run: go run github.com/wailsapp/wails/v2/cmd/wails@v2.15.0 build
 
+      - name: Download Wintun
+        working-directory: desktop
+        shell: pwsh
+        run: |
+          $version = '0.14.1'
+          $archive = Join-Path $env:RUNNER_TEMP "wintun-$version.zip"
+          $extract = Join-Path $env:RUNNER_TEMP "wintun-$version"
+          Invoke-WebRequest "https://www.wintun.net/builds/wintun-$version.zip" -OutFile $archive
+          Expand-Archive -Path $archive -DestinationPath $extract -Force
+          Copy-Item "$extract/wintun/bin/amd64/wintun.dll" "build/bin/wintun.dll" -Force
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: TunFlow-windows-amd64
-          path: desktop/build/bin/TunFlow.exe
+          path: desktop/build/bin/*
