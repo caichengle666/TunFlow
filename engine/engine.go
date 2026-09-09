@@ -20,6 +20,7 @@ import (
 	"github.com/xjasonlyu/tun2socks/v2/log"
 	"github.com/xjasonlyu/tun2socks/v2/proxy"
 	"github.com/xjasonlyu/tun2socks/v2/restapi"
+	"github.com/xjasonlyu/tun2socks/v2/routing"
 	"github.com/xjasonlyu/tun2socks/v2/tunnel"
 )
 
@@ -233,7 +234,19 @@ func netstack(k *Key) (err error) {
 	if _defaultProxy, err = parseProxy(k.Proxy); err != nil {
 		return err
 	}
-	tunnel.T().SetProxy(_defaultProxy)
+
+	activeProxy := _defaultProxy
+	if k.RoutingMode != "" || len(k.DirectCIDRs) > 0 {
+		mode := k.RoutingMode
+		if mode == "" {
+			mode = routing.ModeGlobal
+		}
+		activeProxy, err = routing.New(_defaultProxy, mode, k.DirectCIDRs)
+		if err != nil {
+			return err
+		}
+	}
+	tunnel.T().SetProxy(activeProxy)
 
 	if _defaultDevice, err = parseDevice(k.Device, uint32(k.MTU)); err != nil {
 		return err
@@ -270,6 +283,6 @@ func netstack(k *Key) (err error) {
 		return err
 	}
 
-	log.Infof("[STACK] %s <-> %s", k.Device, k.Proxy)
+	log.Infof("[STACK] %s <-> %s (routing=%s)", k.Device, k.Proxy, k.RoutingMode)
 	return nil
 }
