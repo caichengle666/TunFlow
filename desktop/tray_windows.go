@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/getlantern/systray"
+	"fyne.io/systray"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -26,7 +26,6 @@ func (a *App) startSystemTray() {
 			if icon, err := base64.StdEncoding.DecodeString(trayIconBase64); err == nil {
 				systray.SetIcon(icon)
 			}
-			systray.SetTitle("TunFlow")
 			systray.SetTooltip("TunFlow")
 
 			openItem := systray.AddMenuItem("打开 TunFlow", "打开控制台")
@@ -70,8 +69,13 @@ func (a *App) startSystemTray() {
 						title = "TunFlow · 运行中"
 					}
 					systray.SetTooltip(fmt.Sprintf("%s\n↓ %s/s   ↑ %s/s\n累计 ↓ %s   ↑ %s", title, formatBytes(stats.DownloadPerSecond), formatBytes(stats.UploadPerSecond), formatBytes(stats.DownloadTotal), formatBytes(stats.UploadTotal)))
-					startItem.Check(!status.Running)
-					stopItem.Check(status.Running)
+					startItem.Check()
+					if status.Running {
+						startItem.Uncheck()
+						stopItem.Check()
+					} else {
+						stopItem.Uncheck()
+					}
 				}
 			}()
 		}, func() {})
