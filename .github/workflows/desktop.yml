@@ -46,10 +46,6 @@ jobs:
         working-directory: desktop
         run: go mod tidy
 
-      - name: Build Windows resource
-        working-directory: desktop
-        run: go run github.com/akavel/rsrc@v0.10.2 -manifest tunflow.manifest -o tunflow.syso
-
       - name: Build desktop
         working-directory: desktop
         env:
@@ -81,8 +77,7 @@ jobs:
         run: |
           $version = "0.1.$env:GITHUB_RUN_NUMBER"
           $exe = 'desktop/build/bin/TunFlow.exe'
-          $target = Join-Path $env:RUNNER_TEMP 'version.txt'
-          "TunFlow $version" | Out-File -Encoding utf8 $target
+          "TunFlow $version" | Out-File -Encoding utf8 (Join-Path $env:RUNNER_TEMP 'version.txt')
           Get-Item $exe | Format-List Name,Length,LastWriteTime
           "Version: $version" | Out-File -Encoding utf8 'desktop/build/bin/VERSION.txt'
 
