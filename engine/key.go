@@ -12,6 +12,10 @@ type Key struct {
 	Interface                string        `yaml:"interface"`
 	RoutingMode              string        `yaml:"routing-mode"`
 	DirectCIDRs              []string      `yaml:"direct-cidrs"`
+	DirectRules              []string      `yaml:"direct-rules"`
+	ProxyRules               []string      `yaml:"proxy-rules"`
+	DefaultRoute             string        `yaml:"default-route"`
+	GeoIPFile                string        `yaml:"geoip-file"`
 	TCPModerateReceiveBuffer bool          `yaml:"tcp-moderate-receive-buffer"`
 	TCPSendBufferSize        string        `yaml:"tcp-send-buffer-size"`
 	TCPReceiveBufferSize     string        `yaml:"tcp-receive-buffer-size"`
