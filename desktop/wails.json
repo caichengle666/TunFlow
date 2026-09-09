@@ -1,0 +1,14 @@
+{
+  "version": "2",
+  "name": "TunFlow",
+  "assetdir": "frontend",
+  "frontend:dir": "frontend",
+  "outputfilename": "TunFlow",
+  "info": {
+    "companyName": "TunFlow",
+    "productName": "TunFlow",
+    "productVersion": "0.1.0",
+    "copyright": "Copyright © TunFlow",
+    "comments": "Desktop TUN proxy manager"
+  }
+}
