@@ -4,6 +4,6 @@ Set-Location $PSScriptRoot
 $env:CGO_ENABLED = "1"
 
 go mod tidy
-go build -trimpath -ldflags "-s -w" -o TunFlow.exe .
+go run github.com/wailsapp/wails/v2/cmd/wails@v2.15.0 build
 
-Write-Host "TunFlow.exe built successfully: $((Join-Path (Get-Location) 'TunFlow.exe'))"
+Write-Host "TunFlow desktop build completed under desktop/build/bin."
