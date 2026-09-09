@@ -1,72 +1,90 @@
-![tun2socks](docs/logo.png)
+# TunFlow
 
-[![Go Build][1]](https://github.com/xjasonlyu/tun2socks/actions/workflows/docker.yml)
-[![Go Linter][2]](https://github.com/xjasonlyu/tun2socks/actions/workflows/linter.yml)
-[![Go Version][3]](https://github.com/xjasonlyu/tun2socks/blob/main/go.mod)
-[![Maintainability][4]](https://qlty.sh/gh/xjasonlyu/projects/tun2socks)
-[![GitHub License][5]](https://github.com/xjasonlyu/tun2socks/blob/main/LICENSE)
-[![Docker Pulls][6]](https://hub.docker.com/r/xjasonlyu/tun2socks)
-[![Releases][7]](https://github.com/xjasonlyu/tun2socks/releases)
+TunFlow 是基于 `xjasonlyu/tun2socks` 核心构建的桌面化 TUN 流量管理项目。
 
-## Features
+目标不是重写成熟的网络转发内核，而是在保持核心稳定性的前提下，增加普通用户需要的桌面控制能力：
 
-- **Universal Proxying**: Transparently routes all network traffic from any application through a proxy.
-- **Multi-Protocol**: Supports HTTP/SOCKS/Shadowsocks/SSH/Relay proxies with optional authentication.
-- **Cross-Platform**: Runs on Linux/macOS/Windows/FreeBSD/OpenBSD with platform-specific optimizations.
-- **Gateway Mode**: Acts as a Layer 3 gateway to route traffic from other devices on the same network.
-- **Full IPv6 Compatibility**: Natively supports IPv6; seamlessly tunnels IPv4 over IPv6 and vice versa.
-- **User-Space Networking**: Leverages the **[gVisor](https://github.com/google/gvisor)** network stack for enhanced
-  performance and flexibility.
+```text
+系统应用
+   ↓
+Windows TUN 虚拟网卡
+   ↓
+TunFlow / tun2socks 核心
+   ↓
+分流策略
+   ├── DIRECT
+   └── SOCKS5
+        ↓
+     Internet
+```
 
-## Benchmarks
+## 当前进度
 
-![benchmark](docs/benchmark.png)
+### 核心
 
-For all scenarios of usage, tun2socks performs best.
-See [benchmarks](https://github.com/xjasonlyu/tun2socks/wiki/Benchmarks) for more details.
+底层仍然使用原项目的 gVisor TCP/IP 栈、TUN、TCP/UDP 和代理实现。
 
-## Documentation
+### 桌面版
 
-- [Install from Source](https://github.com/xjasonlyu/tun2socks/wiki/Install-from-Source)
-- [Quickstart Examples](https://github.com/xjasonlyu/tun2socks/wiki/Examples)
-- [Memory Optimization](https://github.com/xjasonlyu/tun2socks/wiki/Memory-Optimization)
+`desktop/` 已加入 Wails 桌面控制层，目前支持：
 
-Full documentation and technical guides can be found at [Wiki](https://github.com/xjasonlyu/tun2socks/wiki).
+- SOCKS5 配置
+- TUN 设备配置
+- 全局代理 / 规则直连 / 全部直连
+- CIDR 直连分流
+- Windows 自动设置 TUN IPv4 地址
+- Windows 自动添加 TUN 默认路由
+- 自动为远程 SOCKS5 地址添加防环路主机路由
+- 配置持久化
+- 中文桌面控制面板
 
-## Community
+Windows 桌面程序构建方式：
 
-Welcome and feel free to ask any questions at [Discussions](https://github.com/xjasonlyu/tun2socks/discussions).
+```powershell
+cd desktop
+.\\build.ps1
+```
 
-## Credits
+也可以：
 
-- [google/gvisor](https://github.com/google/gvisor) - Application Kernel for Containers
-- [wireguard-go](https://git.zx2c4.com/wireguard-go) - Go Implementation of WireGuard
-- [wintun](https://git.zx2c4.com/wintun/) - Layer 3 TUN Driver for Windows
+```powershell
+cd desktop
+go mod tidy
+go build -o TunFlow.exe .
+```
 
-## License
+## 分流设计
 
-[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fxjasonlyu%2Ftun2socks.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Fxjasonlyu%2Ftun2socks?ref=badge_large)
+第一阶段采用稳定的目标 IP/CIDR 策略。例如：
 
-## Star History
+```text
+192.168.0.0/16  → DIRECT
+10.0.0.0/8      → DIRECT
+172.16.0.0/12   → DIRECT
+其他            → SOCKS5
+```
 
-<a href="https://star-history.com/#xjasonlyu/tun2socks&Date">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=xjasonlyu/tun2socks&type=Date&theme=dark" />
-    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=xjasonlyu/tun2socks&type=Date" />
-    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=xjasonlyu/tun2socks&type=Date" />
-  </picture>
-</a>
+策略层实现为现有 `proxy.Proxy` 接口的包装器，因此不会改变原有 TCP/UDP 处理链路。
 
-[1]: https://img.shields.io/github/actions/workflow/status/xjasonlyu/tun2socks/docker.yml?branch=main&logo=github
+后续计划包括：
 
-[2]: https://img.shields.io/github/actions/workflow/status/xjasonlyu/tun2socks/linter.yml?branch=main&logo=githubactions&label=golangci-lint
+- 域名规则
+- GeoIP / GeoSite
+- DNS 防泄漏
+- IPv6 系统路由自动化
+- 网络切换自动恢复
+- Kill Switch
+- 应用/进程级分流
+- 系统托盘
+- 安装器与自动更新
 
-[3]: https://img.shields.io/github/go-mod/go-version/xjasonlyu/tun2socks?logo=go
+## 上游项目
 
-[4]: https://qlty.sh/gh/xjasonlyu/projects/tun2socks/maintainability.svg
+TunFlow 基于 MIT License 的 `xjasonlyu/tun2socks` Fork 开发，并尽量保持核心代码与上游兼容。
 
-[5]: https://img.shields.io/github/license/xjasonlyu/tun2socks
+上游项目：
+https://github.com/xjasonlyu/tun2socks
 
-[6]: https://img.shields.io/docker/pulls/xjasonlyu/tun2socks?logo=docker
+## 许可证
 
-[7]: https://img.shields.io/github/v/release/xjasonlyu/tun2socks?logo=smartthings
+MIT License
