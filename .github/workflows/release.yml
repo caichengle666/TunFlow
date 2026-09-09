@@ -1,5 +1,8 @@
 name: Publish Go Releases
 
+permissions:
+  contents: write
+
 concurrency:
   group: release-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
@@ -7,7 +10,7 @@ concurrency:
 on:
   push:
     tags:
-      - '*'
+      - 'v*'
 
 jobs:
   release:
