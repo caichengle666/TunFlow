@@ -133,12 +133,14 @@ func (ss *Socks5) DialUDP(*M.Metadata) (_ net.PacketConn, err error) {
 
 	bindAddr := addr.UDPAddr()
 	if bindAddr == nil {
+		pc.Close()
 		return nil, fmt.Errorf("invalid UDP binding address: %#v", addr)
 	}
 
 	if bindAddr.IP.IsUnspecified() { /* e.g. "0.0.0.0" or "::" */
 		udpAddr, err := net.ResolveUDPAddr("udp", ss.addr)
 		if err != nil {
+			pc.Close()
 			return nil, fmt.Errorf("resolve udp address %s: %w", ss.addr, err)
 		}
 		bindAddr.IP = udpAddr.IP

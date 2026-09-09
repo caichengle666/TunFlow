@@ -12,7 +12,7 @@ import (
 type testProxy struct{}
 
 func (testProxy) DialContext(context.Context, *M.Metadata) (net.Conn, error) { return nil, nil }
-func (testProxy) DialUDP(*M.Metadata) (net.PacketConn, error) { return nil, nil }
+func (testProxy) DialUDP(*M.Metadata) (net.PacketConn, error)                { return nil, nil }
 
 func TestBypassCIDR(t *testing.T) {
 	r, err := New(testProxy{}, ModeBypass, []string{"192.168.0.0/16"})
@@ -53,5 +53,13 @@ func TestGlobalAndDirectModes(t *testing.T) {
 func TestInvalidCIDR(t *testing.T) {
 	if _, err := New(testProxy{}, ModeBypass, []string{"not-a-cidr"}); err == nil {
 		t.Fatal("expected invalid CIDR error")
+	}
+}
+
+func TestDomainRulesAreRejected(t *testing.T) {
+	for _, rule := range []string{"domain:example.com", "geosite:cn"} {
+		if _, err := New(testProxy{}, ModeRules, []string{rule}); err == nil {
+			t.Fatalf("expected unsupported rule error for %q", rule)
+		}
 	}
 }

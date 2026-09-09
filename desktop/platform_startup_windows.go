@@ -25,7 +25,7 @@ func setStartWithWindows(enabled bool) error {
 		}
 		cmd := exec.Command("reg", "delete", startupRunKey, "/v", name, "/f")
 		if out, err := cmd.CombinedOutput(); err != nil {
-			return fmt.Errorf("关闭开机启动失败: %w", cleanCommandOutput(out))
+			return fmt.Errorf("关闭开机启动失败: %s", cleanCommandOutput(out))
 		}
 		return nil
 	}
@@ -41,7 +41,7 @@ func setStartWithWindows(enabled bool) error {
 	value := `"` + exe + `"`
 	cmd := exec.Command("reg", "add", startupRunKey, "/v", name, "/t", "REG_SZ", "/d", value, "/f")
 	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("开启开机启动失败: %w", cleanCommandOutput(out))
+		return fmt.Errorf("开启开机启动失败: %s", cleanCommandOutput(out))
 	}
 	return nil
 }

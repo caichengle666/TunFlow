@@ -3,9 +3,11 @@ package restapi
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -25,6 +27,8 @@ var (
 	}
 
 	_endpoints = make(map[string]http.Handler)
+	_serverMu  sync.Mutex
+	_server    *http.Server
 )
 
 func registerEndpoint(pattern string, handler http.Handler) {
@@ -58,7 +62,33 @@ func Start(addr, token string) error {
 		return err
 	}
 
-	return http.Serve(listener, r)
+	server := &http.Server{Handler: r}
+	_serverMu.Lock()
+	_server = server
+	_serverMu.Unlock()
+	defer func() {
+		_serverMu.Lock()
+		if _server == server {
+			_server = nil
+		}
+		_serverMu.Unlock()
+	}()
+
+	err = server.Serve(listener)
+	if errors.Is(err, http.ErrServerClosed) {
+		return nil
+	}
+	return err
+}
+
+func Stop() error {
+	_serverMu.Lock()
+	server := _server
+	_serverMu.Unlock()
+	if server == nil {
+		return nil
+	}
+	return server.Close()
 }
 
 func hello(w http.ResponseWriter, r *http.Request) {
@@ -111,6 +141,7 @@ func traffic(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return
 		}
+		defer wsConn.Close()
 	}
 
 	if wsConn == nil {

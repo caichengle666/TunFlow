@@ -66,8 +66,13 @@ func (a *App) updateTrayLoop(startItem, stopItem *systray.MenuItem) {
 			title = "TunFlow · 运行中"
 		}
 		systray.SetTooltip(fmt.Sprintf("%s\n↓ %s/s   ↑ %s/s\n累计 ↓ %s   ↑ %s", title, formatBytes(stats.DownloadPerSecond), formatBytes(stats.UploadPerSecond), formatBytes(stats.DownloadTotal), formatBytes(stats.UploadTotal)))
-		startItem.Check(!s.Running)
-		stopItem.Check(s.Running)
+		if s.Running {
+			startItem.Uncheck()
+			stopItem.Check()
+		} else {
+			startItem.Check()
+			stopItem.Uncheck()
+		}
 	}
 }
 
@@ -85,7 +90,7 @@ func (a *App) ShowWindow() {
 }
 
 func (a *App) MinimizeToTray() { a.HideToTray() }
-func (a *App) CloseToTray() { a.HideToTray() }
+func (a *App) CloseToTray()    { a.HideToTray() }
 
 func (a *App) ToggleMaximize() {
 	if a.ctx == nil {

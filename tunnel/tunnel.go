@@ -40,6 +40,8 @@ type Tunnel struct {
 
 	procOnce   sync.Once
 	procCancel context.CancelFunc
+	closeOnce  sync.Once
+	done       chan struct{}
 }
 
 func New(proxy proxy.Proxy, manager *statistic.Manager) *Tunnel {
@@ -50,6 +52,7 @@ func New(proxy proxy.Proxy, manager *statistic.Manager) *Tunnel {
 		proxy:      proxy,
 		manager:    manager,
 		procCancel: func() { /* nop */ },
+		done:       make(chan struct{}),
 	}
 }
 
@@ -64,11 +67,19 @@ func (t *Tunnel) UDPIn() chan<- adapter.UDPConn {
 }
 
 func (t *Tunnel) HandleTCP(conn adapter.TCPConn) {
-	t.TCPIn() <- conn
+	select {
+	case t.TCPIn() <- conn:
+	case <-t.done:
+		_ = conn.Close()
+	}
 }
 
 func (t *Tunnel) HandleUDP(conn adapter.UDPConn) {
-	t.UDPIn() <- conn
+	select {
+	case t.UDPIn() <- conn:
+	case <-t.done:
+		_ = conn.Close()
+	}
 }
 
 func (t *Tunnel) process(ctx context.Context) {
@@ -95,7 +106,10 @@ func (t *Tunnel) ProcessAsync() {
 
 // Close closes the Tunnel and releases its resources.
 func (t *Tunnel) Close() {
-	t.procCancel()
+	t.closeOnce.Do(func() {
+		close(t.done)
+		t.procCancel()
+	})
 }
 
 func (t *Tunnel) Proxy() proxy.Proxy {
