@@ -15,7 +15,10 @@ import (
 
 const trayIconBase64 = "AAABAAIAEBAAAAAAIABjAgAAJgAAACAgAAAAACAA8gAAAIkCAACJUE5HDQoaCgAAAA1JSERSAAAAEAAAABAIBgAAAB/z/2EAAAIqSURBVHicfZO/axRBGIafb3Zn7/a8PU0uF0lOECux0MreLmCKgAEFSyurINgJsRX8C7TVv8BeC9OoRSBgkyIEwQMLSaJ3ZM/czux8FnuXcOZwYIr58T7z8b7fSNbqKLOGyPRaZ1+LZwnFGELhgLFIQWyMGEHL8B+ACIRA0R9Qv9xBjEFVkSjC/fqNHxXYVoaW5QyACKFwRInl+tPHdO+tYuIIDQFTSxjs7rH/+i2Hn7exrRYaqkoka3V08rJEhlsvn7O8tkJxcAQCUJ1FjZTgPTsbm/zc+kTUaEAIGACJDP74mGuPHrK8tsKf3g+0LFFfot6jqrj+AELg5otn1BfaqHMggkGEMCqoLXborq9SHBxhElv5MZmAxDHl8IRkYY7u+l18niORqSqoLBDExufjO41RQA1ChFg7w0TVKXf/FYv1YB2SujNvTgHjqKJa7dTdKXHN4XoLuN4FdDmlzEcoHhAMqoiNKfp9Brt7xI30rBIFrMd9bzP8cIPR16vkHxepDx9gmy3Ul+MUjKEcFey/ekPwnihNUedRF4AC18sII8U0PRoFsqU72MY8GooKoGXAZhmHX7bZ2djE50OS9hxJZ45kfp569yJxaiDEmMgQwgnBjwAzbqRJEsbg8yG1Tpsr66uItYgoZV5QG94nW7pNKB3f3j/haO8dJmlOAyaQ4Bw+zyc7KB7bbBGnl9CyxJ8cYuIGoOcB46ZAIjOOSiuI92jw499qQau0/gLFHPjk4UMw1AAAAABJRU5ErkJggolQTkcNChoKAAAADUlIRFIAAAAgAAAAIAgGAAAAc3p69AAAALlJREFUeJxj5OUT/c8wgIBpIC0fdcCoAxgYGBhYSNXgdHgDQTX7bAOINo+R2GxIjMXkOISoKCDHcmL1EXQAuZYTqx+vAyi1nBhzBjwX4HQAtXxPyLzBGwKjDhh1AL0AyZURMeDTcisMMb7IY1jVUj0EsFmOTxynA0ipUglZAgMmWa+IdwC9AF4HkBMKVHUAPRxBVBTQ0hFEN8lggFAtiS8hnpkmRrkDiAHYUjs2y2nmAFLA4M6GI8IBABYFMQA/6VKcAAAAAElFTkSuQmCC"
 
-var trayOnce sync.Once
+var (
+	trayOnce     sync.Once
+	trayActionMu sync.Mutex
+)
 
 func (a *App) startSystemTray() {
 	trayOnce.Do(func() {
@@ -36,15 +39,19 @@ func (a *App) startSystemTray() {
 				for {
 					select {
 					case <-openItem.ClickedCh:
-						a.ShowWindow()
+						go a.ShowWindow()
 					case <-startItem.ClickedCh:
-						if err := a.Start(); err != nil {
-							a.showTrayError(err)
-						}
+						go a.runTrayAction(func() {
+							if err := a.Start(); err != nil {
+								a.showTrayError(err)
+							}
+						})
 					case <-stopItem.ClickedCh:
-						if err := a.Stop(); err != nil {
-							a.showTrayError(err)
-						}
+						go a.runTrayAction(func() {
+							if err := a.Stop(); err != nil {
+								a.showTrayError(err)
+							}
+						})
 					case <-quitItem.ClickedCh:
 						a.QuitApp()
 						return
@@ -63,12 +70,20 @@ func (a *App) startSystemTray() {
 						title = "TunFlow · 运行中"
 					}
 					systray.SetTooltip(fmt.Sprintf("%s\n↓ %s/s   ↑ %s/s\n累计 ↓ %s   ↑ %s", title, formatBytes(stats.DownloadPerSecond), formatBytes(stats.UploadPerSecond), formatBytes(stats.DownloadTotal), formatBytes(stats.UploadTotal)))
+					startItem.Check(!status.Running)
+					stopItem.Check(status.Running)
 				}
 			}()
 		}, func() {})
 		a.trayEnd = endLoop
 		startLoop()
 	})
+}
+
+func (a *App) runTrayAction(action func()) {
+	trayActionMu.Lock()
+	defer trayActionMu.Unlock()
+	action()
 }
 
 func (a *App) showTrayError(err error) {
@@ -78,6 +93,7 @@ func (a *App) showTrayError(err error) {
 	if a.ctx != nil {
 		runtime.WindowShow(a.ctx)
 		runtime.WindowUnminimise(a.ctx)
+		runtime.EventsEmit(a.ctx, "tray-error", err.Error())
 	}
 }
 
