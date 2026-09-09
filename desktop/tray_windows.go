@@ -7,7 +7,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/getlantern/systray"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -37,9 +36,9 @@ func (a *App) startSystemTray() {
 					case <-openItem.ClickedCh:
 						a.ShowWindow()
 					case <-startItem.ClickedCh:
-						_ = a.Start()
+						a.showTrayError(a.Start())
 					case <-stopItem.ClickedCh:
-						_ = a.Stop()
+						a.showTrayError(a.Stop())
 					case <-quitItem.ClickedCh:
 						runtime.Quit(a.ctx)
 						return
@@ -48,14 +47,14 @@ func (a *App) startSystemTray() {
 			}()
 
 			go a.updateTrayLoop(startItem, stopItem)
+			a.trayUpdates <- struct{}{}
 		}, func() {})
 	})
 }
 
 func (a *App) updateTrayLoop(startItem, stopItem *systray.MenuItem) {
-	t := time.NewTicker(time.Second)
-	defer t.Stop()
-	for range t.C {
+	lastTooltip := ""
+	for range a.trayUpdates {
 		if a.ctx == nil {
 			continue
 		}
@@ -65,7 +64,20 @@ func (a *App) updateTrayLoop(startItem, stopItem *systray.MenuItem) {
 		if s.Running {
 			title = "TunFlow · 运行中"
 		}
-		systray.SetTooltip(fmt.Sprintf("%s\n↓ %s/s   ↑ %s/s\n累计 ↓ %s   ↑ %s", title, formatBytes(stats.DownloadPerSecond), formatBytes(stats.UploadPerSecond), formatBytes(stats.DownloadTotal), formatBytes(stats.UploadTotal)))
+		tooltip := title
+		if s.Running {
+			tooltip += fmt.Sprintf(
+				"\n↓ %s/s   ↑ %s/s\n累计 ↓ %s   ↑ %s",
+				formatBytes(stats.DownloadPerSecond),
+				formatBytes(stats.UploadPerSecond),
+				formatBytes(stats.DownloadTotal),
+				formatBytes(stats.UploadTotal),
+			)
+		}
+		if tooltip == lastTooltip {
+			continue
+		}
+		systray.SetTooltip(tooltip)
 		if s.Running {
 			startItem.Uncheck()
 			stopItem.Check()
@@ -74,6 +86,13 @@ func (a *App) updateTrayLoop(startItem, stopItem *systray.MenuItem) {
 			stopItem.Uncheck()
 		}
 	}
+}
+
+func (a *App) showTrayError(err error) {
+	if err == nil || a.ctx == nil {
+		return
+	}
+	runtime.WindowShow(a.ctx)
 }
 
 func (a *App) HideToTray() {

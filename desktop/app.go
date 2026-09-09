@@ -17,10 +17,12 @@ import (
 )
 
 type App struct {
-	ctx context.Context
-	mu  sync.Mutex
-	cfg Config
-	up  routeState
+	ctx         context.Context
+	mu          sync.Mutex
+	cfg         Config
+	up          routeState
+	err         error
+	trayUpdates chan struct{}
 }
 
 type Config struct {
@@ -44,6 +46,7 @@ type Status struct {
 	Mode             string `json:"mode"`
 	AutoRoute        bool   `json:"autoRoute"`
 	RouteReady       bool   `json:"routeReady"`
+	LastError        string `json:"lastError,omitempty"`
 	StartWithWindows bool   `json:"startWithWindows"`
 }
 
@@ -53,18 +56,22 @@ const (
 )
 
 func NewApp() *App {
-	return &App{cfg: Config{
-		Proxy:            "socks5://127.0.0.1:1080",
-		Device:           "tun://TunFlow",
-		Mode:             "global",
-		DirectCIDRs:      []string{},
-		DirectRules:      []string{},
-		ProxyRules:       []string{},
-		DefaultRoute:     "proxy",
-		GeoIPFile:        "geoip.dat",
-		AutoRoute:        true,
-		StartWithWindows: false,
-	}}
+	app := &App{
+		trayUpdates: make(chan struct{}, 1),
+		cfg: Config{
+			Proxy:            "socks5://127.0.0.1:1080",
+			Device:           "tun://TunFlow",
+			Mode:             "global",
+			DirectCIDRs:      []string{},
+			DirectRules:      []string{},
+			ProxyRules:       []string{},
+			DefaultRoute:     "proxy",
+			GeoIPFile:        "geoip.dat",
+			AutoRoute:        true,
+			StartWithWindows: false,
+		},
+	}
+	return app
 }
 
 func (a *App) startup(ctx context.Context) {
@@ -74,6 +81,10 @@ func (a *App) startup(ctx context.Context) {
 	a.load()
 	a.normalizeConfigLocked()
 	a.startSystemTray()
+	select {
+	case a.trayUpdates <- struct{}{}:
+	default:
+	}
 }
 
 func (a *App) shutdown(ctx context.Context) {
@@ -102,6 +113,7 @@ func (a *App) GetStatus() Status {
 		Mode:             a.cfg.Mode,
 		AutoRoute:        a.cfg.AutoRoute,
 		RouteReady:       a.up.active,
+		LastError:        errString(a.err),
 		StartWithWindows: a.cfg.StartWithWindows,
 	}
 }
@@ -243,6 +255,22 @@ func (a *App) SaveConfig(cfg Config) error {
 func (a *App) Start() error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	err := a.startLocked()
+	a.err = err
+	if err == nil {
+		a.notifyTrayChangeLocked()
+	}
+	return err
+}
+
+func (a *App) notifyTrayChangeLocked() {
+	select {
+	case a.trayUpdates <- struct{}{}:
+	default:
+	}
+}
+
+func (a *App) startLocked() error {
 	if engine.Running() {
 		return nil
 	}
@@ -279,10 +307,22 @@ func (a *App) Start() error {
 	return nil
 }
 
+func errString(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
+}
+
 func (a *App) Stop() error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	return a.stopLocked()
+	err := a.stopLocked()
+	a.err = err
+	if err == nil {
+		a.notifyTrayChangeLocked()
+	}
+	return err
 }
 
 func (a *App) stopLocked() (firstErr error) {
