@@ -46,6 +46,10 @@ jobs:
         working-directory: desktop
         run: go mod tidy
 
+      - name: Build Windows resource
+        working-directory: desktop
+        run: go run github.com/akavel/rsrc@v0.10.2 -manifest tunflow.manifest -o tunflow.syso
+
       - name: Build desktop
         working-directory: desktop
         env:
@@ -72,10 +76,20 @@ jobs:
           Invoke-WebRequest 'https://raw.githubusercontent.com/caichengle666/x-tunnel/main/geoip.dat' -OutFile 'desktop/build/bin/geoip.dat'
           Invoke-WebRequest 'https://raw.githubusercontent.com/caichengle666/x-tunnel/main/geosite.dat' -OutFile 'desktop/build/bin/geosite.dat'
 
+      - name: Add version metadata
+        shell: powershell
+        run: |
+          $version = "0.1.$env:GITHUB_RUN_NUMBER"
+          $exe = 'desktop/build/bin/TunFlow.exe'
+          $target = Join-Path $env:RUNNER_TEMP 'version.txt'
+          "TunFlow $version" | Out-File -Encoding utf8 $target
+          Get-Item $exe | Format-List Name,Length,LastWriteTime
+          "Version: $version" | Out-File -Encoding utf8 'desktop/build/bin/VERSION.txt'
+
       - name: Smoke check packaged files
         shell: powershell
         run: |
-          $required = @('desktop/build/bin/TunFlow.exe','desktop/build/bin/wintun.dll','desktop/build/bin/geoip.dat','desktop/build/bin/geosite.dat')
+          $required = @('desktop/build/bin/TunFlow.exe','desktop/build/bin/wintun.dll','desktop/build/bin/geoip.dat','desktop/build/bin/geosite.dat','desktop/build/bin/VERSION.txt')
           foreach ($file in $required) {
             if (-not (Test-Path $file)) { throw "Missing artifact: $file" }
           }
