@@ -5,7 +5,9 @@ package main
 import (
 	"context"
 	"encoding/base64"
+	"fmt"
 	"sync"
+	"time"
 
 	"github.com/getlantern/systray"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -17,16 +19,16 @@ var trayOnce sync.Once
 
 func (a *App) startSystemTray() {
 	trayOnce.Do(func() {
-		go systray.Run(func() {
+		startLoop, endLoop := systray.RunWithExternalLoop(func() {
 			if icon, err := base64.StdEncoding.DecodeString(trayIconBase64); err == nil {
 				systray.SetIcon(icon)
 			}
+			systray.SetTitle("TunFlow")
 			systray.SetTooltip("TunFlow")
 
 			openItem := systray.AddMenuItem("打开 TunFlow", "打开控制台")
 			startItem := systray.AddMenuItem("启动 TUN", "启动 TunFlow")
 			stopItem := systray.AddMenuItem("停止 TUN", "停止 TunFlow")
-			stopItem.Disable()
 			systray.AddSeparator()
 			quitItem := systray.AddMenuItem("退出 TunFlow", "退出程序")
 
@@ -36,43 +38,47 @@ func (a *App) startSystemTray() {
 					case <-openItem.ClickedCh:
 						a.ShowWindow()
 					case <-startItem.ClickedCh:
-						a.showTrayError(a.Start())
+						if err := a.Start(); err != nil {
+							a.showTrayError(err)
+						}
 					case <-stopItem.ClickedCh:
-						a.showTrayError(a.Stop())
+						if err := a.Stop(); err != nil {
+							a.showTrayError(err)
+						}
 					case <-quitItem.ClickedCh:
-						runtime.Quit(a.ctx)
+						a.QuitApp()
 						return
 					}
 				}
 			}()
 
-			go a.updateTrayLoop(startItem, stopItem)
-			a.trayUpdates <- struct{}{}
+			go func() {
+				ticker := time.NewTicker(time.Second)
+				defer ticker.Stop()
+				for range ticker.C {
+					stats := a.GetTrafficStats()
+					status := a.GetStatus()
+					title := "TunFlow · 已停止"
+					if status.Running {
+						title = "TunFlow · 运行中"
+					}
+					systray.SetTooltip(fmt.Sprintf("%s\n↓ %s/s   ↑ %s/s\n累计 ↓ %s   ↑ %s", title, formatBytes(stats.DownloadPerSecond), formatBytes(stats.UploadPerSecond), formatBytes(stats.DownloadTotal), formatBytes(stats.UploadTotal)))
+				}
+			}()
 		}, func() {})
+		a.trayEnd = endLoop
+		startLoop()
 	})
 }
 
-func (a *App) updateTrayLoop(startItem, stopItem *systray.MenuItem) {
-	for range a.trayUpdates {
-		if a.ctx == nil {
-			continue
-		}
-		s := a.GetStatus()
-		if s.Running {
-			startItem.Disable()
-			stopItem.Enable()
-		} else {
-			startItem.Enable()
-			stopItem.Disable()
-		}
-	}
-}
-
 func (a *App) showTrayError(err error) {
-	if err == nil || a.ctx == nil {
+	if err == nil {
 		return
 	}
-	runtime.WindowShow(a.ctx)
+	if a.ctx != nil {
+		runtime.WindowShow(a.ctx)
+		runtime.WindowUnminimise(a.ctx)
+	}
 }
 
 func (a *App) HideToTray() {
@@ -85,15 +91,16 @@ func (a *App) ShowWindow() {
 	if a.ctx != nil {
 		runtime.WindowShow(a.ctx)
 		runtime.WindowUnminimise(a.ctx)
-		// WindowShow restores visibility but does not always activate a
-		// frameless Wails window after it was hidden to the tray.
-		runtime.WindowSetAlwaysOnTop(a.ctx, true)
-		runtime.WindowSetAlwaysOnTop(a.ctx, false)
 	}
 }
 
-func (a *App) MinimizeToTray() { a.HideToTray() }
-func (a *App) CloseToTray()    { a.HideToTray() }
+func (a *App) MinimizeToTray() {
+	a.HideToTray()
+}
+
+func (a *App) CloseToTray() {
+	a.HideToTray()
+}
 
 func (a *App) ToggleMaximize() {
 	if a.ctx == nil {
