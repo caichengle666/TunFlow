@@ -63,3 +63,12 @@ func TestDomainRulesAreRejected(t *testing.T) {
 		}
 	}
 }
+
+func TestGeoIPFileIsNotRequiredWithoutGeoIPRules(t *testing.T) {
+	if _, err := NewWithConfig(testProxy{}, Config{
+		Mode:      ModeGlobal,
+		GeoIPFile: "missing-geoip.dat",
+	}); err != nil {
+		t.Fatalf("unexpected error without GeoIP rules: %v", err)
+	}
+}

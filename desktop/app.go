@@ -230,7 +230,7 @@ func bundledDataPath(name string) (string, bool) {
 		if _, err := os.Stat(name); err == nil {
 			return name, true
 		}
-		return name, false
+		name = filepath.Base(name)
 	}
 	exe, err := os.Executable()
 	if err == nil {

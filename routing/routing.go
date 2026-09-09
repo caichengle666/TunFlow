@@ -165,7 +165,7 @@ func NewWithConfig(upstream proxy.Proxy, cfg Config) (*Proxy, error) {
 			r.proxyR = append(r.proxyR, rule)
 		}
 	}
-	if cfg.GeoIPFile != "" {
+	if cfg.GeoIPFile != "" && hasGeoIPRule(r.directR, r.proxyR) {
 		geo, err := LoadGeoIP(cfg.GeoIPFile)
 		if err != nil {
 			return nil, err
@@ -173,6 +173,17 @@ func NewWithConfig(upstream proxy.Proxy, cfg Config) (*Proxy, error) {
 		r.geoip = geo
 	}
 	return r, nil
+}
+
+func hasGeoIPRule(groups ...[]Rule) bool {
+	for _, rules := range groups {
+		for _, rule := range rules {
+			if rule.Type == RuleGeoIP {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func parseRule(raw string) (Rule, bool, error) {
