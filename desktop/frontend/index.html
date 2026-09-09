@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TunFlow</title>
+  <script src="/wails/ipc.js"></script>
+  <script src="/wails/runtime.js"></script>
   <style>
     :root{color-scheme:dark;font-family:Inter,Segoe UI,system-ui,sans-serif;background:#0d0e15;color:#f8fafc}
     *{box-sizing:border-box}
@@ -95,9 +97,9 @@
   document.querySelectorAll('.nav button').forEach(b=>b.onclick=()=>openPage(b.dataset.page));
   function fill(){document.getElementById('proxy').value=config.proxy||'';document.getElementById('device').value=config.device||'';document.getElementById('iface').value=config.interface||'';document.getElementById('mode').value=config.mode||'global';document.getElementById('autoRoute').checked=config.autoRoute!==false;document.getElementById('cidrs').value=(config.directCIDRs||[]).join('\n')}
   async function load(){const a=api();if(!a)return;config=await a.GetConfig();fill();await refresh()}
-  async function saveConfig(){const a=api();if(!a)return;config={proxy:document.getElementById('proxy').value.trim(),device:document.getElementById('device').value.trim(),interface:document.getElementById('iface').value.trim(),mode:document.getElementById('mode').value,directCIDRs:document.getElementById('cidrs').value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean),autoRoute:document.getElementById('autoRoute').checked};try{await a.SaveConfig(config);toast('设置已保存');await refresh()}catch(e){toast(String(e))}}
+  async function saveConfig(){const a=api();if(!a)return false;config={proxy:document.getElementById('proxy').value.trim(),device:document.getElementById('device').value.trim(),interface:document.getElementById('iface').value.trim(),mode:document.getElementById('mode').value,directCIDRs:document.getElementById('cidrs').value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean),autoRoute:document.getElementById('autoRoute').checked};try{await a.SaveConfig(config);toast('设置已保存');await refresh();return true}catch(e){toast(String(e));return false}}
   async function refresh(){const a=api();if(!a)return;const s=await a.GetStatus();const on=!!s.running;document.getElementById('dot').classList.toggle('on',on);document.getElementById('stateText').textContent=on?'运行中':'已停止';document.getElementById('bigStatus').textContent=on?'系统流量已接管':'未接管';document.getElementById('toggle').textContent=on?'停止 TunFlow':'启动 TunFlow';document.getElementById('toggle').classList.toggle('stop',on);document.getElementById('proxySummary').textContent=s.proxy||'—';document.getElementById('modeSummary').textContent=({global:'全局代理',bypass:'规则直连',direct:'全部直连'})[s.mode]||s.mode;document.getElementById('route').textContent=on?(s.routeReady?'已配置':'未配置'):'—'}
-  document.getElementById('toggle').onclick=async()=>{const a=api();if(!a)return;try{const s=await a.GetStatus();if(s.running) await a.Stop(); else {await saveConfig();await a.Start()}await refresh()}catch(e){toast(String(e))}}
+  document.getElementById('toggle').onclick=async()=>{const a=api();if(!a)return;try{const s=await a.GetStatus();if(s.running) await a.Stop(); else if(await saveConfig()) await a.Start();await refresh()}catch(e){toast(String(e))}}
   setInterval(refresh,1500);setTimeout(load,250);
 </script>
 </body>
