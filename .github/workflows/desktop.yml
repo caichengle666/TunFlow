@@ -128,7 +128,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $tag = "v$env:TUNFLOW_VERSION"
-          $existing = gh release view $tag 2>$null
+          gh release view $tag 2>$null
           if ($LASTEXITCODE -eq 0) {
             gh release upload $tag $env:RELEASE_ARCHIVE --clobber
           } else {
