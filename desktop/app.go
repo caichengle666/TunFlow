@@ -65,6 +65,7 @@ func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	a.load()
 	a.normalizeConfigLocked()
+	a.startSystemTray()
 }
 
 func (a *App) shutdown(ctx context.Context) {
@@ -188,8 +189,7 @@ func (a *App) Stop() error {
 	return a.stopLocked()
 }
 
-func (a *App) stopLocked() error {
-	var firstErr error
+func (a *App) stopLocked() (firstErr error) {
 	if a.up.active {
 		if err := a.teardownRoutesLocked(); err != nil {
 			firstErr = err
