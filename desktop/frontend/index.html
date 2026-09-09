@@ -8,20 +8,14 @@
   <script src="/wails/runtime.js"></script>
   <style>
     :root{color-scheme:dark;font-family:Inter,Segoe UI,system-ui,sans-serif;background:#0d0e15;color:#f8fafc}
-    *{box-sizing:border-box}
-    body{margin:0;background:radial-gradient(circle at 20% 0%,#171a2b 0,#0d0e15 45%);min-height:100vh}
-    .app{display:grid;grid-template-columns:220px 1fr;min-height:100vh}
-    aside{padding:28px 18px;border-right:1px solid #25283a;background:rgba(8,9,15,.65);backdrop-filter:blur(16px)}
-    .brand{font-size:24px;font-weight:800;letter-spacing:.4px;margin:0 12px 28px}.brand span{color:#4fd1c5}
-    .nav{display:grid;gap:8px}.nav button{border:0;background:transparent;color:#98a2b3;text-align:left;padding:12px 14px;border-radius:12px;cursor:pointer;font-size:14px}.nav button.active,.nav button:hover{background:#171a27;color:#fff}
-    main{padding:34px;max-width:1100px;width:100%;margin:auto}
-    .top{display:flex;align-items:center;justify-content:space-between;margin-bottom:22px}.title{font-size:28px;font-weight:750}.status{display:flex;align-items:center;gap:8px;color:#9aa4b2;font-size:13px}.dot{width:9px;height:9px;border-radius:50%;background:#606b7a}.dot.on{background:#45d483;box-shadow:0 0 14px #45d483}
+    *{box-sizing:border-box} body{margin:0;background:radial-gradient(circle at 20% 0%,#171a2b 0,#0d0e15 45%);min-height:100vh}
+    .app{display:grid;grid-template-columns:220px 1fr;min-height:100vh} aside{padding:28px 18px;border-right:1px solid #25283a;background:rgba(8,9,15,.65);backdrop-filter:blur(16px)}
+    .brand{font-size:24px;font-weight:800;letter-spacing:.4px;margin:0 12px 28px}.brand span{color:#4fd1c5}.nav{display:grid;gap:8px}.nav button{border:0;background:transparent;color:#98a2b3;text-align:left;padding:12px 14px;border-radius:12px;cursor:pointer;font-size:14px}.nav button.active,.nav button:hover{background:#171a27;color:#fff}
+    main{padding:34px;max-width:1100px;width:100%;margin:auto}.top{display:flex;align-items:center;justify-content:space-between;margin-bottom:22px}.title{font-size:28px;font-weight:750}.status{display:flex;align-items:center;gap:8px;color:#9aa4b2;font-size:13px}.dot{width:9px;height:9px;border-radius:50%;background:#606b7a}.dot.on{background:#45d483;box-shadow:0 0 14px #45d483}
     .hero{display:grid;grid-template-columns:1fr 220px;gap:18px}.card{background:rgba(20,23,35,.72);border:1px solid #25283a;border-radius:18px;padding:22px;box-shadow:0 18px 60px rgba(0,0,0,.24)}
-    label{display:block;color:#9da7b5;font-size:12px;margin:0 0 8px}.field{margin-top:14px}.input,.textarea,.select{width:100%;background:#0f111b;color:#eef2f7;border:1px solid #303549;border-radius:12px;padding:12px 13px;outline:none}.textarea{min-height:150px;resize:vertical;font:12px ui-monospace,SFMono-Regular,Consolas,monospace}.input:focus,.textarea:focus,.select:focus{border-color:#4fd1c5}
-    .big-status{font-size:44px;font-weight:800;margin:20px 0 6px}.muted{color:#8994a6;font-size:13px}.primary{width:100%;border:0;border-radius:14px;padding:13px 16px;background:#4fd1c5;color:#071011;font-weight:750;cursor:pointer;margin-top:18px}.primary.stop{background:#ef6b73;color:white}.secondary{border:1px solid #303549;background:#151925;color:#d6dbe4;border-radius:12px;padding:10px 14px;cursor:pointer}
-    .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:18px}.stat{padding:16px;border-radius:15px;background:#111420;border:1px solid #25283a}.stat b{font-size:20px}.stat span{display:block;color:#7f8a9d;font-size:12px;margin-top:3px}
-    .page{display:none}.page.active{display:block}.row{display:grid;grid-template-columns:1fr 1fr;gap:14px}.switch{display:flex;align-items:center;gap:10px;margin-top:14px;color:#d5d9e2;font-size:14px}.switch input{accent-color:#4fd1c5}
-    .toast{position:fixed;right:26px;bottom:26px;background:#151925;border:1px solid #303549;padding:12px 14px;border-radius:12px;opacity:0;transform:translateY(8px);transition:.2s;pointer-events:none}.toast.show{opacity:1;transform:none}
+    label{display:block;color:#9da7b5;font-size:12px;margin:0 0 8px}.field{margin-top:14px}.input,.textarea,.select{width:100%;background:#0f111b;color:#eef2f7;border:1px solid #303549;border-radius:12px;padding:12px 13px;outline:none}.textarea{min-height:140px;resize:vertical;font:12px ui-monospace,SFMono-Regular,Consolas,monospace}.input:focus,.textarea:focus,.select:focus{border-color:#4fd1c5}
+    .big-status{font-size:44px;font-weight:800;margin:20px 0 6px}.muted{color:#8994a6;font-size:13px;line-height:1.6}.primary{width:100%;border:0;border-radius:14px;padding:13px 16px;background:#4fd1c5;color:#071011;font-weight:750;cursor:pointer;margin-top:18px}.primary.stop{background:#ef6b73;color:white}.secondary{border:1px solid #303549;background:#151925;color:#d6dbe4;border-radius:12px;padding:10px 14px;cursor:pointer}
+    .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:18px}.stat{padding:16px;border-radius:15px;background:#111420;border:1px solid #25283a}.stat b{font-size:20px}.stat span{display:block;color:#7f8a9d;font-size:12px;margin-top:3px}.page{display:none}.page.active{display:block}.row{display:grid;grid-template-columns:1fr 1fr;gap:14px}.switch{display:flex;align-items:center;gap:10px;margin-top:14px;color:#d5d9e2;font-size:14px}.switch input{accent-color:#4fd1c5}.toast{position:fixed;right:26px;bottom:26px;background:#151925;border:1px solid #303549;padding:12px 14px;border-radius:12px;opacity:0;transform:translateY(8px);transition:.2s;pointer-events:none}.toast.show{opacity:1;transform:none}.hint{margin-top:8px;font-size:11px;color:#6f7a8e}
     @media(max-width:800px){.app{grid-template-columns:1fr}aside{display:none}.hero,.row{grid-template-columns:1fr}main{padding:20px}.stats{grid-template-columns:1fr}}
   </style>
 </head>
@@ -30,10 +24,7 @@
   <aside>
     <div class="brand">Tun<span>Flow</span></div>
     <div class="nav">
-      <button class="active" data-page="home">控制台</button>
-      <button data-page="proxy">代理设置</button>
-      <button data-page="rules">分流规则</button>
-      <button data-page="advanced">高级设置</button>
+      <button class="active" data-page="home">控制台</button><button data-page="proxy">代理设置</button><button data-page="rules">分流规则</button><button data-page="advanced">高级设置</button>
     </div>
   </aside>
   <main>
@@ -41,15 +32,9 @@
       <div class="top"><div class="title">控制台</div><div class="status"><i id="dot" class="dot"></i><span id="stateText">已停止</span></div></div>
       <div class="hero">
         <div class="card">
-          <div class="muted">系统流量</div>
-          <div id="bigStatus" class="big-status">未接管</div>
-          <div id="detail" class="muted">配置 SOCKS5 后，一键让系统流量进入 TUN。</div>
+          <div class="muted">系统流量</div><div id="bigStatus" class="big-status">未接管</div><div id="detail" class="muted">配置 SOCKS5 后，一键让系统流量进入 TUN。</div>
           <button id="toggle" class="primary">启动 TunFlow</button>
-          <div class="stats">
-            <div class="stat"><b id="rx">—</b><span>下载</span></div>
-            <div class="stat"><b id="tx">—</b><span>上传</span></div>
-            <div class="stat"><b id="route">—</b><span>路由</span></div>
-          </div>
+          <div class="stats"><div class="stat"><b id="rx">—</b><span>下载</span></div><div class="stat"><b id="tx">—</b><span>上传</span></div><div class="stat"><b id="route">—</b><span>路由</span></div></div>
         </div>
         <div class="card"><div class="muted">当前出口</div><div id="proxySummary" style="margin-top:14px;font-weight:650;word-break:break-all">—</div><div class="muted" style="margin-top:16px">模式</div><div id="modeSummary" style="margin-top:6px">全局代理</div><button class="secondary" style="width:100%;margin-top:20px" onclick="openPage('proxy')">修改配置</button></div>
       </div>
@@ -59,12 +44,11 @@
       <div class="top"><div class="title">代理设置</div></div>
       <div class="card">
         <div class="field"><label>SOCKS5 地址</label><input id="proxy" class="input" placeholder="socks5://127.0.0.1:1080"></div>
-        <div class="row">
-          <div class="field"><label>TUN 设备</label><input id="device" class="input" placeholder="tun://TunFlow"></div>
-          <div class="field"><label>物理网络接口（可选）</label><input id="iface" class="input" placeholder="Wi-Fi / Ethernet"></div>
-        </div>
-        <div class="field"><label>运行模式</label><select id="mode" class="select"><option value="global">全局代理</option><option value="bypass">规则直连</option><option value="direct">全部直连</option></select></div>
+        <div class="row"><div class="field"><label>TUN 设备</label><input id="device" class="input" placeholder="tun://TunFlow"></div><div class="field"><label>物理网络接口（可选）</label><input id="iface" class="input" placeholder="Wi-Fi / Ethernet"></div></div>
+        <div class="field"><label>运行模式</label><select id="mode" class="select"><option value="global">全局代理</option><option value="rules">规则分流</option><option value="direct">全部直连</option></select></div>
         <label class="switch"><input id="autoRoute" type="checkbox"> 启动时自动配置 Windows TUN 与系统默认路由</label>
+        <label class="switch"><input id="startWithWindows" type="checkbox"> Windows 开机自动启动 TunFlow</label>
+        <div class="hint">开机启动只负责打开 TunFlow，不会自动启动代理服务；SOCKS5 服务器仍需可用。</div>
         <button class="primary" onclick="saveConfig()">保存设置</button>
       </div>
     </section>
@@ -72,8 +56,10 @@
     <section id="rules" class="page">
       <div class="top"><div class="title">分流规则</div></div>
       <div class="card">
-        <div class="muted">当前版本先提供稳定的 CIDR 直连规则。命中规则的目标地址直接连接，其余流量走 SOCKS5。</div>
-        <div class="field"><label>直连网段（每行一个 CIDR）</label><textarea id="cidrs" class="textarea" placeholder="10.0.0.0/8\n172.16.0.0/12\n192.168.0.0/16\n223.5.5.0/24"></textarea></div>
+        <div class="muted">规则按“直连优先 → 代理规则 → 默认策略”判断。当前 TUN 路径稳定支持 IP、CIDR、私网和 GeoIP 规则；域名 / GeoSite 需要进一步接入域名感知层后才会生效。</div>
+        <div class="field"><label>直连规则（每行一个）</label><textarea id="directRules" class="textarea" placeholder="private\ngeoip:cn\n192.168.0.0/16\n10.0.0.0/8"></textarea></div>
+        <div class="field"><label>代理规则（每行一个）</label><textarea id="proxyRules" class="textarea" placeholder="geoip:us"></textarea></div>
+        <div class="row"><div class="field"><label>默认策略</label><select id="defaultRoute" class="select"><option value="proxy">未命中规则 → 代理</option><option value="direct">未命中规则 → 直连</option></select></div><div class="field"><label>说明</label><div class="muted">规则优先级与 x-tunnel 设计保持一致：直连规则先于代理规则。</div></div></div>
         <button class="primary" onclick="saveConfig()">保存分流规则</button>
       </div>
     </section>
@@ -81,25 +67,25 @@
     <section id="advanced" class="page">
       <div class="top"><div class="title">高级设置</div></div>
       <div class="card">
-        <div class="muted">这些选项直接对应底层 tun2socks 能力，后续版本会继续图形化。</div>
-        <div class="field"><label>日志等级</label><select class="select"><option>info</option><option>debug</option><option>warn</option><option>error</option></select></div>
-        <div class="field"><label>说明</label><div class="muted">防 SOCKS5 路由环路、Windows 路由自动恢复、DNS 防泄漏、GeoIP/域名规则正在逐步加入。</div></div>
+        <div class="muted">TunFlow 桌面层尽量保持 tun2socks 核心不变，只负责配置、路由和策略。</div>
+        <div class="field"><label>GeoIP 数据文件</label><input id="geoIPFile" class="input" placeholder="geoip.dat"><div class="hint">打包版默认从 EXE 同目录读取 geoip.dat。</div></div>
+        <div class="field"><label>运行说明</label><div class="muted">Windows 版本会自动请求管理员权限，并在启动时配置 TUN 默认路由，同时为 SOCKS5 服务器建立直连绕行路由，避免代理回环。</div></div>
       </div>
     </section>
   </main>
 </div>
 <div id="toast" class="toast"></div>
 <script>
-  let config = {proxy:'socks5://127.0.0.1:1080',device:'tun://TunFlow',interface:'',mode:'global',directCIDRs:[],autoRoute:true};
-  function api(){ return window.go && window.go.main && window.go.main.App ? window.go.main.App : null; }
+  let config={proxy:'socks5://127.0.0.1:1080',device:'tun://TunFlow',interface:'',mode:'global',directCIDRs:[],directRules:[],proxyRules:[],defaultRoute:'proxy',geoIPFile:'geoip.dat',autoRoute:true,startWithWindows:false};
+  function api(){return window.go&&window.go.main&&window.go.main.App?window.go.main.App:null}
   function toast(msg){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),2200)}
-  function openPage(name){document.querySelectorAll('.page').forEach(x=>x.classList.toggle('active',x.id===name));document.querySelectorAll('.nav button').forEach(x=>x.classList.toggle('active',x.dataset.page===name));if(name==='proxy'||name==='rules')fill()}
+  function openPage(name){document.querySelectorAll('.page').forEach(x=>x.classList.toggle('active',x.id===name));document.querySelectorAll('.nav button').forEach(x=>x.classList.toggle('active',x.dataset.page===name));fill()}
   document.querySelectorAll('.nav button').forEach(b=>b.onclick=()=>openPage(b.dataset.page));
-  function fill(){document.getElementById('proxy').value=config.proxy||'';document.getElementById('device').value=config.device||'';document.getElementById('iface').value=config.interface||'';document.getElementById('mode').value=config.mode||'global';document.getElementById('autoRoute').checked=config.autoRoute!==false;document.getElementById('cidrs').value=(config.directCIDRs||[]).join('\n')}
+  function fill(){document.getElementById('proxy').value=config.proxy||'';document.getElementById('device').value=config.device||'';document.getElementById('iface').value=config.interface||'';document.getElementById('mode').value=config.mode||'global';document.getElementById('autoRoute').checked=config.autoRoute!==false;document.getElementById('startWithWindows').checked=!!config.startWithWindows;document.getElementById('directRules').value=(config.directRules||config.directCIDRs||[]).join('\n');document.getElementById('proxyRules').value=(config.proxyRules||[]).join('\n');document.getElementById('defaultRoute').value=config.defaultRoute||'proxy';document.getElementById('geoIPFile').value=config.geoIPFile||'geoip.dat'}
   async function load(){const a=api();if(!a)return;config=await a.GetConfig();fill();await refresh()}
-  async function saveConfig(){const a=api();if(!a)return false;config={proxy:document.getElementById('proxy').value.trim(),device:document.getElementById('device').value.trim(),interface:document.getElementById('iface').value.trim(),mode:document.getElementById('mode').value,directCIDRs:document.getElementById('cidrs').value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean),autoRoute:document.getElementById('autoRoute').checked};try{await a.SaveConfig(config);toast('设置已保存');await refresh();return true}catch(e){toast(String(e));return false}}
-  async function refresh(){const a=api();if(!a)return;const s=await a.GetStatus();const on=!!s.running;document.getElementById('dot').classList.toggle('on',on);document.getElementById('stateText').textContent=on?'运行中':'已停止';document.getElementById('bigStatus').textContent=on?'系统流量已接管':'未接管';document.getElementById('toggle').textContent=on?'停止 TunFlow':'启动 TunFlow';document.getElementById('toggle').classList.toggle('stop',on);document.getElementById('proxySummary').textContent=s.proxy||'—';document.getElementById('modeSummary').textContent=({global:'全局代理',bypass:'规则直连',direct:'全部直连'})[s.mode]||s.mode;document.getElementById('route').textContent=on?(s.routeReady?'已配置':'未配置'):'—'}
-  document.getElementById('toggle').onclick=async()=>{const a=api();if(!a)return;try{const s=await a.GetStatus();if(s.running) await a.Stop(); else if(await saveConfig()) await a.Start();await refresh()}catch(e){toast(String(e))}}
+  async function saveConfig(){const a=api();if(!a)return false;config={proxy:document.getElementById('proxy').value.trim(),device:document.getElementById('device').value.trim(),interface:document.getElementById('iface').value.trim(),mode:document.getElementById('mode').value,directCIDRs:[],directRules:document.getElementById('directRules').value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean),proxyRules:document.getElementById('proxyRules').value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean),defaultRoute:document.getElementById('defaultRoute').value,geoIPFile:document.getElementById('geoIPFile').value.trim()||'geoip.dat',autoRoute:document.getElementById('autoRoute').checked,startWithWindows:document.getElementById('startWithWindows').checked};try{await a.SaveConfig(config);toast('设置已保存');await refresh();return true}catch(e){toast(String(e));return false}}
+  async function refresh(){const a=api();if(!a)return;const s=await a.GetStatus();const on=!!s.running;document.getElementById('dot').classList.toggle('on',on);document.getElementById('stateText').textContent=on?'运行中':'已停止';document.getElementById('bigStatus').textContent=on?'系统流量已接管':'未接管';document.getElementById('toggle').textContent=on?'停止 TunFlow':'启动 TunFlow';document.getElementById('toggle').classList.toggle('stop',on);document.getElementById('proxySummary').textContent=s.proxy||'—';document.getElementById('modeSummary').textContent=({global:'全局代理',rules:'规则分流',direct:'全部直连'})[s.mode]||s.mode;document.getElementById('route').textContent=on?(s.routeReady?'已配置':'未配置'):'—'}
+  document.getElementById('toggle').onclick=async()=>{const a=api();if(!a)return;try{const s=await a.GetStatus();if(s.running)await a.Stop();else if(await saveConfig())await a.Start();await refresh()}catch(e){toast(String(e))}}
   setInterval(refresh,1500);setTimeout(load,250);
 </script>
 </body>
