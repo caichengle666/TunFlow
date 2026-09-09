@@ -10,6 +10,8 @@ type Key struct {
 	Device                   string        `yaml:"device"`
 	LogLevel                 string        `yaml:"loglevel"`
 	Interface                string        `yaml:"interface"`
+	RoutingMode              string        `yaml:"routing-mode"`
+	DirectCIDRs              []string      `yaml:"direct-cidrs"`
 	TCPModerateReceiveBuffer bool          `yaml:"tcp-moderate-receive-buffer"`
 	TCPSendBufferSize        string        `yaml:"tcp-send-buffer-size"`
 	TCPReceiveBufferSize     string        `yaml:"tcp-receive-buffer-size"`
