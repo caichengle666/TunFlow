@@ -40,10 +40,8 @@ require (
 	github.com/leaanthony/u v1.1.1 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
-	github.com/microcosm-cc/bluemonday v1.0.27 // indirect
-	github.com/muesli/reflow v0.3.0 // indirect
-	github.com/oxtoacart/bpool v1.0.0 // indirect
-	github.com/pkg/browser v0.0.0-20240102092130-5acb342b9a9a // indirect
+	github.com/oxtoacart/bpool v0.0.0-20180211043024-bc8d7a0d4f3d // indirect
+	github.com/pkg/browser v0.0.0-20240102092130-5acb6b72f1c8 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/samber/lo v1.49.1 // indirect
@@ -55,7 +53,6 @@ require (
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasttemplate v1.2.2 // indirect
 	github.com/wailsapp/mimetype v1.4.1 // indirect
-	github.com/wailsapp/wails/v2 v2.15.0 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.28.1 // indirect
