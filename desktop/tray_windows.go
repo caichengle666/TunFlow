@@ -1,4 +1,4 @@
-//go:build windows
+﻿//go:build windows
 
 package main
 
@@ -88,13 +88,6 @@ func (a *App) startSystemTray() {
 						title = "TunFlow · 运行中"
 					}
 					systray.SetTooltip(fmt.Sprintf("%s\n↓ %s/s   ↑ %s/s\n累计 ↓ %s   ↑ %s", title, formatBytes(stats.DownloadPerSecond), formatBytes(stats.UploadPerSecond), formatBytes(stats.DownloadTotal), formatBytes(stats.UploadTotal)))
-					startItem.Check()
-					if status.Running {
-						startItem.Uncheck()
-						stopItem.Check()
-					} else {
-						stopItem.Uncheck()
-					}
 				}
 			}()
 		}, func() {})
