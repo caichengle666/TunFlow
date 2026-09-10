@@ -30,6 +30,7 @@ type App struct {
 	configWatchStop    chan struct{}
 	configWatchWG      sync.WaitGroup
 	configDiskChecksum string
+	configLoaded       bool
 	networkSignature   string
 	runtimeInterface   string
 }
@@ -88,11 +89,17 @@ func (a *App) startup(ctx context.Context) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.ctx = ctx
-	_ = a.load()
-	a.normalizeConfigLocked()
-	if _, err := os.Stat(a.configPath()); os.IsNotExist(err) {
-		_ = a.saveLocked()
+	if err := a.load(); err != nil {
+		if _, statErr := os.Stat(a.configPath()); os.IsNotExist(statErr) {
+			a.normalizeConfigLocked()
+			if a.saveLocked() == nil {
+				a.configLoaded = true
+			}
+		}
+	} else {
+		a.configLoaded = true
 	}
+	a.normalizeConfigLocked()
 	a.refreshConfigDiskChecksumLocked()
 	a.startConfigWatcherLocked()
 	a.startSystemTray()
@@ -111,7 +118,9 @@ func (a *App) shutdown(ctx context.Context) {
 	if engine.Running() || a.up.active {
 		_ = a.stopLocked()
 	}
-	_ = a.saveLocked()
+	if a.configLoaded {
+		_ = a.saveLocked()
+	}
 	a.mu.Unlock()
 	if watchStop != nil {
 		a.configWatchWG.Wait()
@@ -284,6 +293,7 @@ func (a *App) SaveConfig(cfg Config) error {
 		_ = setStartWithWindows(oldCfg.StartWithWindows)
 		return err
 	}
+	a.configLoaded = true
 	if running {
 		if err := a.applyRunningConfigLocked(oldCfg); err != nil {
 			a.err = err
