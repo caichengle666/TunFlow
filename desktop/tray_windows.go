@@ -101,29 +101,27 @@ func (a *App) refreshTrayMenu() {
 }
 
 func (a *App) handleTrayMenu() {
-	go func() {
-		for {
-			select {
-			case <-trayOpenItem.ClickedCh:
-				a.ShowWindow()
-			case <-trayStartItem.ClickedCh:
-				a.runTrayAction(func() {
-					if err := a.Start(); err != nil {
-						a.showTrayError(err)
-					}
-				})
-			case <-trayStopItem.ClickedCh:
-				a.runTrayAction(func() {
-					if err := a.Stop(); err != nil {
-						a.showTrayError(err)
-					}
-				})
-			case <-trayQuitItem.ClickedCh:
-				a.QuitApp()
-				return
-			}
+	for {
+		select {
+		case <-trayOpenItem.ClickedCh:
+			a.ShowWindow()
+		case <-trayStartItem.ClickedCh:
+			a.runTrayAction(func() {
+				if err := a.Start(); err != nil {
+					a.showTrayError(err)
+				}
+			})
+		case <-trayStopItem.ClickedCh:
+			a.runTrayAction(func() {
+				if err := a.Stop(); err != nil {
+					a.showTrayError(err)
+				}
+			})
+		case <-trayQuitItem.ClickedCh:
+			a.QuitApp()
+			return
 		}
-	}()
+	}
 }
 
 func (a *App) startTrayTooltipLoop() {

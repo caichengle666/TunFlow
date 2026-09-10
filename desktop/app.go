@@ -259,15 +259,19 @@ func replaceRuleFile(source, target string) error {
 func (a *App) SaveConfig(cfg Config) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	cfg.Proxy = strings.TrimSpace(cfg.Proxy)
+	cfg.Device = strings.TrimSpace(cfg.Device)
+	cfg.Interface = strings.TrimSpace(cfg.Interface)
+	cfg.GeoIPFile = strings.TrimSpace(cfg.GeoIPFile)
 	if err := validateAndNormalizeConfig(&cfg); err != nil {
 		return err
 	}
 
 	// Normalize the path before writing so the checksum below matches the
 	// exact bytes produced by saveLocked.
-	a.cfg = cfg
-	a.normalizeConfigLocked()
-	cfg = a.cfg
+	normalized := &App{cfg: cfg}
+	normalized.normalizeConfigLocked()
+	cfg = normalized.cfg
 
 	if err := setStartWithWindows(cfg.StartWithWindows); err != nil {
 		return err
