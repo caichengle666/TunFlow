@@ -51,34 +51,13 @@ func (a *App) startSystemTray() {
 
 			a.refreshTrayMenu()
 
-			go func() {
-				for range systray.TrayOpenedCh {
-					a.refreshTrayMenu()
-				}
-			}()
-
-			go func() {
-				ticker := time.NewTicker(5 * time.Second)
-				defer ticker.Stop()
-				lastTooltip := ""
-				refreshTrayMenu := func() {
-					a.refreshTrayMenu()
-				}
-				for range ticker.C {
-					stats := a.GetTrafficStats()
-					status := a.GetStatus()
-					title := "TunFlow · 已停止"
-					if status.Running {
-						title = "TunFlow · 运行中"
-					}
-					tooltip := fmt.Sprintf("%s\n↓ %s/s   ↑ %s/s\n累计 ↓ %s   ↑ %s", title, formatBytes(stats.DownloadPerSecond), formatBytes(stats.UploadPerSecond), formatBytes(stats.DownloadTotal), formatBytes(stats.UploadTotal))
-					if tooltip != lastTooltip {
-						systray.SetTooltip(tooltip)
-						lastTooltip = tooltip
-					}
-					refreshTrayMenu()
-				}
-			}()
+			systray.SetOnTapped(func() {
+				a.ShowWindow()
+			})
+			systray.SetOnSecondaryTapped(func() {
+				a.refreshTrayMenu()
+			})
+			a.startTrayTooltipLoop()
 		}, func() {})
 		a.trayEnd = endLoop
 		startLoop()
@@ -138,6 +117,27 @@ func (a *App) refreshTrayMenu() {
 			case <-quitItem.ClickedCh:
 				a.QuitApp()
 				return
+			}
+		}
+	}()
+}
+
+func (a *App) startTrayTooltipLoop() {
+	go func() {
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+		lastTooltip := ""
+		for range ticker.C {
+			stats := a.GetTrafficStats()
+			status := a.GetStatus()
+			title := "TunFlow · 已停止"
+			if status.Running {
+				title = "TunFlow · 运行中"
+			}
+			tooltip := fmt.Sprintf("%s\n↓ %s/s   ↑ %s/s\n累计 ↓ %s   ↑ %s", title, formatBytes(stats.DownloadPerSecond), formatBytes(stats.UploadPerSecond), formatBytes(stats.DownloadTotal), formatBytes(stats.UploadTotal))
+			if tooltip != lastTooltip {
+				systray.SetTooltip(tooltip)
+				lastTooltip = tooltip
 			}
 		}
 	}()
