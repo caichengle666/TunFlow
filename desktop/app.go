@@ -101,9 +101,6 @@ func (a *App) startup(ctx context.Context) {
 				a.err = nil
 			}
 		} else {
-			// Never replace an existing user config with defaults just because
-			// it is temporarily invalid or incomplete. Keep the file intact and
-			// expose the load error through GetStatus().
 			a.err = err
 			a.configLoaded = false
 		}
@@ -117,8 +114,6 @@ func (a *App) startup(ctx context.Context) {
 	a.startConfigWatcherLocked()
 	a.mu.Unlock()
 
-	// Tray initialization must happen outside a.mu because refreshTrayMenu()
-	// calls GetStatus(), which acquires the same mutex.
 	a.startSystemTray()
 }
 
@@ -136,7 +131,6 @@ func (a *App) shutdown(ctx context.Context) {
 		_ = a.stopLocked()
 	}
 	if a.configLoaded {
-		// Only persist if the on-disk config has not been changed externally.
 		if a.isConfigDiskUnchangedLocked() {
 			_ = a.saveLocked()
 		}
@@ -290,9 +284,7 @@ func replaceRuleFile(source, target string) error {
 }
 
 func (a *App) SaveConfig(cfg Config) error {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	cfg.Proxy = strings.TrimSpace(cfg.Proxy)
+	cfg.Proxy = normalizeProxy(cfg.Proxy)
 	cfg.Device = strings.TrimSpace(cfg.Device)
 	cfg.Interface = strings.TrimSpace(cfg.Interface)
 	cfg.GeoIPFile = strings.TrimSpace(cfg.GeoIPFile)
@@ -300,39 +292,48 @@ func (a *App) SaveConfig(cfg Config) error {
 		return err
 	}
 
-	// Normalize the configuration before writing so the checksum matches the
-	// exact bytes emitted by saveLocked.
-	normalized := &App{cfg: cfg}
-	normalized.normalizeConfigLocked()
-	cfg = normalized.cfg
-
+	a.mu.Lock()
 	oldCfg := a.cfg
 	running := engine.Running()
 	a.cfg = cfg
 	if err := a.saveLocked(); err != nil {
 		a.cfg = oldCfg
+		a.mu.Unlock()
 		return err
 	}
 	a.configLoaded = true
-	// Persist the JSON first. Registry changes are best-effort and must not
-	// prevent the configuration from being saved.
 	_ = setStartWithWindows(cfg.StartWithWindows)
-	if running {
-		if err := a.applyRunningConfigLocked(oldCfg); err != nil {
-			a.err = err
-			// Keep the new settings on disk even when the running core cannot
-			// hot-reload them. A subsequent stop/start will use the saved config.
-			return nil
-		}
-	}
 	a.err = nil
+	a.mu.Unlock()
+
+	// Saving configuration is intentionally independent from applying it to
+	// the running core. The GUI must not report a runtime SOCKS5 error as a
+	// failure to write config.json. Runtime application happens asynchronously
+	// and the persisted file remains authoritative when hot reload fails.
+	if running {
+		go func(previous Config, saved Config) {
+			a.mu.Lock()
+			err := a.applyRunningConfigLocked(previous)
+			if err != nil {
+				a.err = err
+			} else {
+				a.err = nil
+			}
+			a.mu.Unlock()
+		}(oldCfg, cfg)
+	}
 	return nil
 }
 
+func normalizeProxy(raw string) string {
+	proxy := strings.TrimSpace(raw)
+	if strings.HasPrefix(strings.ToLower(proxy), "s5://") {
+		return "socks5://" + proxy[len("s5://"):]
+	}
+	return proxy
+}
+
 func validateAndNormalizeConfig(cfg *Config) error {
-	// An empty proxy is a valid saved state: it lets a newly packaged portable
-	// build start with a blank configuration instead of inventing 127.0.0.1:1080.
-	// Start() performs the stricter runtime check before touching the core.
 	if strings.TrimSpace(cfg.Device) == "" {
 		return errors.New("TUN 设备不能为空")
 	}
@@ -379,7 +380,7 @@ func (a *App) buildEngineKeyLocked(cfg Config) *engine.Key {
 		interfaceName = a.runtimeInterface
 	}
 	return &engine.Key{
-		Proxy:        strings.TrimSpace(cfg.Proxy),
+		Proxy:        normalizeProxy(cfg.Proxy),
 		Device:       strings.TrimSpace(cfg.Device),
 		Interface:    interfaceName,
 		RoutingMode:  strings.TrimSpace(cfg.Mode),
@@ -396,13 +397,13 @@ func (a *App) startLocked() error {
 	if engine.Running() {
 		return nil
 	}
+	a.normalizeConfigLocked()
 	if strings.TrimSpace(a.cfg.Proxy) == "" {
 		return errors.New("SOCKS5 地址不能为空")
 	}
 	if strings.TrimSpace(a.cfg.Device) == "" {
 		return errors.New("TUN 设备不能为空")
 	}
-	a.normalizeConfigLocked()
 	if err := checkProxyEndpoint(a.cfg.Proxy); err != nil {
 		return err
 	}
@@ -524,6 +525,7 @@ func (a *App) startWithConfigLocked(cfg Config) error {
 
 func (a *App) normalizeConfigLocked() {
 	_ = validateAndNormalizeConfig(&a.cfg)
+	a.cfg.Proxy = normalizeProxy(a.cfg.Proxy)
 	if path, ok := bundledDataPath(a.cfg.GeoIPFile); ok {
 		a.cfg.GeoIPFile = path
 	}
@@ -567,6 +569,7 @@ func (a *App) load() error {
 	if cfg.Device == "" {
 		return errors.New("配置文件缺少 device")
 	}
+	cfg.Proxy = normalizeProxy(cfg.Proxy)
 	a.cfg = cfg
 	return nil
 }
@@ -578,11 +581,11 @@ func (a *App) saveLocked() error {
 		return err
 	}
 	if err := os.WriteFile(path, data, 0o600); err != nil {
-		return err
+		return fmt.Errorf("写入配置文件失败 %q: %w", path, err)
 	}
 	stored, err := os.ReadFile(path)
 	if err != nil {
-		return fmt.Errorf("保存配置后无法读取文件: %w", err)
+		return fmt.Errorf("保存配置后无法读取文件 %q: %w", path, err)
 	}
 	if !bytes.Equal(stored, data) {
 		return errors.New("保存配置校验失败: 文件内容与当前配置不一致")
@@ -620,6 +623,7 @@ func errString(err error) string {
 }
 
 func checkProxyEndpoint(rawURL string) error {
+	rawURL = normalizeProxy(rawURL)
 	proxyURL := rawURL
 	if !strings.Contains(proxyURL, "://") {
 		proxyURL = "socks5://" + proxyURL
