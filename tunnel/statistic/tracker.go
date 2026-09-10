@@ -24,6 +24,28 @@ type trackerInfo struct {
 	DownloadTotal *atomic.Int64 `json:"download"`
 }
 
+// Info returns a plain map describing this connection, safe for JSON
+// marshalling by external callers (HTTP API, desktop layer, scripts).
+func (t *trackerInfo) Info() map[string]any {
+	protocol := ""
+	dst := ""
+	src := ""
+	if t.Metadata != nil {
+		protocol = t.Metadata.Network.String()
+		dst = t.Metadata.DestinationAddress()
+		src = t.Metadata.SourceAddress()
+	}
+	return map[string]any{
+		"id":        t.UUID.String(),
+		"protocol":  protocol,
+		"source":    src,
+		"dest":      dst,
+		"start":     t.Start.Format(time.RFC3339),
+		"upload":    t.UploadTotal.Load(),
+		"download":  t.DownloadTotal.Load(),
+	}
+}
+
 type tcpTracker struct {
 	net.Conn `json:"-"`
 

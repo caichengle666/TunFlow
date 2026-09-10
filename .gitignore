@@ -23,7 +23,7 @@ go.work.sum
 
 # Build directory
 build/
-desktop/wailsjs/
+desktop/frontend/wailsjs/
 
 # IDE
 .idea/
@@ -31,3 +31,8 @@ desktop/wailsjs/
 
 # Misc
 .DS_Store
+
+# Temporary helper scripts
+scripts/
+# Desktop screenshots / debug assets
+*.png
