@@ -3,12 +3,14 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
 	"net/url"
 	"os/exec"
+	"reflect"
 	"strconv"
 	"strings"
 )
@@ -198,7 +200,32 @@ func runPowerShellJSON(script string, target any) error {
 	if err != nil {
 		return fmt.Errorf("PowerShell 查询失败: %w: %s", err, strings.TrimSpace(string(out)))
 	}
-	if err := json.Unmarshal(out, target); err != nil {
+
+	payload := bytes.TrimSpace(out)
+	if len(payload) == 0 {
+		return errors.New("解析 PowerShell 查询结果失败: 输出为空")
+	}
+
+	// Windows PowerShell 5.1 emits a bare JSON object when the pipeline
+	// produces exactly one item, even when the producer is wrapped in @(...).
+	// Most callers intentionally decode into []struct{...}. Normalize that
+	// single-object shape to a one-element slice before falling back to the
+	// regular json.Unmarshal path.
+	if payload[0] == '{' {
+		rv := reflect.ValueOf(target)
+		if rv.IsValid() && rv.Kind() == reflect.Ptr && !rv.IsNil() && rv.Elem().Kind() == reflect.Slice {
+			elem := reflect.New(rv.Elem().Type().Elem())
+			if err := json.Unmarshal(payload, elem.Interface()); err != nil {
+				return fmt.Errorf("解析 PowerShell 查询结果失败: %w", err)
+			}
+			slice := reflect.MakeSlice(rv.Elem().Type(), 1, 1)
+			slice.Index(0).Set(elem.Elem())
+			rv.Elem().Set(slice)
+			return nil
+		}
+	}
+
+	if err := json.Unmarshal(payload, target); err != nil {
 		return fmt.Errorf("解析 PowerShell 查询结果失败: %w", err)
 	}
 	return nil
