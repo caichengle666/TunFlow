@@ -92,7 +92,7 @@ func (a *App) startSystemTray() {
 			}()
 		}, func() {})
 		a.trayEnd = endLoop
-		startLoop()
+		go startLoop()
 	})
 }
 
