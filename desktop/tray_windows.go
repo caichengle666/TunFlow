@@ -4,28 +4,20 @@ package main
 
 import (
 	"context"
-	_ "embed"
+	"encoding/base64"
 	"fmt"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"fyne.io/systray"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-//go:embed assets/tray.ico
-var trayIconICO []byte
+const trayIconBase64 = "AAABAAIAEBAAAAAAIABjAgAAJgAAACAgAAAAACAA8gAAAIkCAACJUE5HDQoaCgAAAA1JSERSAAAAEAAAABAIBgAAAB/z/2EAAAIqSURBVHicfZO/axRBGIafb3Zn7/a8PU0uF0lOECux0MreLmCKgAEFSyurINgJsRX8C9OoRSBgkyIEwQMLSaJ3ZM/czux8FnuXcOZwYIr58T7z8b7fSNbqKLOGyPRaZ1+LZwnFGELhgLFIQWyMGEHL8B+ACIRA0R9Qv9xBjEFVkSjC/fqNHxXYVoaW5QyACKFwRInl+tPHdO+tYuIIDQFTSxjs7rH/+i2H7exrRYaqkoka3V08rJEhlsvn7O8tkJxcAQCUJ1FjZTgPTsbm/zc+kTUaEAIGACJDP74mGuPHrK8tsKf3g+0LFFfot6jqrj+AELg5otn1BfaqHMggkGEMCqoLXborq9SHBxhElv5MZmAxDHl8IRkYY7u+l18niORqSqoLBDExufjO41RQA1ChFg7w0TVKXf/FYv1YB2SujNvTgHjqKJa7dTdKXHN4XoLuN4FdDmlzEcoHhAMqoiNKfp9Brt7xI30rBIFrMd9bzP8cIPR16vkHxepDx9gmy3Ul+MUjKEcFey/ekPwnihNUedRF4AC18sII8U0PRoFsqU72MY8GooKoGXAZhmHX7bZ2djE50OS9hxJZ45kfp569yJxaiDEmMgQwgnBjwAzbqRJEsbg8yG1Tpsr66uItYgoZV5QG94nW7pNKB3f3j/haO8dJmlOAyaQ4Bw+zyc7KB7bbBGnl9CyxJ8cYuIGoOcB46ZAIjOOSiuI92jw499qQau0/gLFHPjk4UMw1AAAAABJRU5ErkJggolQTkcNChoKAAAADUlIRFIAAAAgAAAAIAgGAAAAc3p69AAAALlJREFUeJxj5OUT/c8wgIBpIC0fdcCoAxgYGBhYSNXgdHgDQTX7bAOINo+R2GxIjMXkOISoKCDHcmL1EXQAuZYTqx+vAyi1nBhzBjwX4HQAtXxPyLzBGwKjDhh1AL0AyZURMeDTcisMMb7IY1jVUj0EsFmOTxynA0ipUglZAgMmWa+IdwC9AF4HkBMKVHUAPRxBVBTQ0hFEN8lggFAtiS8hnpkmRrkDiAHYUjs2y2nmAFLA4M6GI8IBABYFMQA/6VKcAAAAAElFTkSuQmCC"
 
 var (
-	trayOnce      sync.Once
-	trayActionMu  sync.Mutex
-	trayBusy      atomic.Bool
-	trayMenuMu    sync.Mutex
-	trayOpenItem  *systray.MenuItem
-	trayStartItem *systray.MenuItem
-	trayStopItem  *systray.MenuItem
-	trayQuitItem  *systray.MenuItem
+	trayOnce     sync.Once
+	trayActionMu sync.Mutex
 )
 
 func formatBytes(v int64) string {
@@ -50,21 +42,61 @@ func formatBytes(v int64) string {
 func (a *App) startSystemTray() {
 	trayOnce.Do(func() {
 		startLoop, endLoop := systray.RunWithExternalLoop(func() {
-			systray.SetIcon(trayIconICO)
+			if icon, err := base64.StdEncoding.DecodeString(trayIconBase64); err == nil {
+				systray.SetIcon(icon)
+			}
 			systray.SetTooltip("TunFlow")
 
-			trayOpenItem = systray.AddMenuItem("打开 TunFlow", "打开控制台")
-			trayStartItem = systray.AddMenuItem("启动 TUN", "启动 TunFlow")
-			trayStopItem = systray.AddMenuItem("停止 TUN", "停止 TunFlow")
+			openItem := systray.AddMenuItem("打开 TunFlow", "打开控制台")
+			startItem := systray.AddMenuItem("启动 TUN", "启动 TunFlow")
+			stopItem := systray.AddMenuItem("停止 TUN", "停止 TunFlow")
 			systray.AddSeparator()
-			trayQuitItem = systray.AddMenuItem("退出 TunFlow", "退出程序")
-			a.refreshTrayMenu()
+			quitItem := systray.AddMenuItem("退出 TunFlow", "退出程序")
 
-			systray.SetOnTapped(func() {
-				a.ShowWindow()
-			})
-			go a.handleTrayMenu()
-			a.startTrayTooltipLoop()
+			go func() {
+				for {
+					select {
+					case <-openItem.ClickedCh:
+						go a.ShowWindow()
+					case <-startItem.ClickedCh:
+						go a.runTrayAction(func() {
+							if err := a.Start(); err != nil {
+								a.showTrayError(err)
+							}
+						})
+					case <-stopItem.ClickedCh:
+						go a.runTrayAction(func() {
+							if err := a.Stop(); err != nil {
+								a.showTrayError(err)
+							}
+						})
+					case <-quitItem.ClickedCh:
+						a.QuitApp()
+						return
+					}
+				}
+			}()
+
+			go func() {
+				ticker := time.NewTicker(time.Second)
+				defer ticker.Stop()
+				for range ticker.C {
+					stats := a.GetTrafficStats()
+					status := a.GetStatus()
+					title := "TunFlow · 已停止"
+					if status.Running {
+						title = "TunFlow · 运行中"
+					}
+					systray.SetTooltip(fmt.Sprintf("%s\n↓ %s/s   ↑ %s/s\n累计 ↓ %s   ↑ %s", title, formatBytes(stats.DownloadPerSecond), formatBytes(stats.UploadPerSecond), formatBytes(stats.DownloadTotal), formatBytes(stats.UploadTotal)))
+					startItem.Check()
+					if status.Running {
+						startItem.Uncheck()
+						stopItem.Check()
+					} else {
+						stopItem.Uncheck()
+					}
+				}
+			}()
 		}, func() {})
 		a.trayEnd = endLoop
 		startLoop()
@@ -74,75 +106,7 @@ func (a *App) startSystemTray() {
 func (a *App) runTrayAction(action func()) {
 	trayActionMu.Lock()
 	defer trayActionMu.Unlock()
-	if !trayBusy.CompareAndSwap(false, true) {
-		return
-	}
-	defer trayBusy.Store(false)
 	action()
-	a.refreshTrayMenu()
-}
-
-func (a *App) refreshTrayMenu() {
-	trayMenuMu.Lock()
-	defer trayMenuMu.Unlock()
-
-	if trayStartItem == nil || trayStopItem == nil {
-		return
-	}
-	status := a.GetStatus()
-
-	if status.Running {
-		trayStartItem.Disable()
-		trayStopItem.Enable()
-	} else {
-		trayStartItem.Enable()
-		trayStopItem.Disable()
-	}
-}
-
-func (a *App) handleTrayMenu() {
-	for {
-		select {
-		case <-trayOpenItem.ClickedCh:
-			a.ShowWindow()
-		case <-trayStartItem.ClickedCh:
-			a.runTrayAction(func() {
-				if err := a.Start(); err != nil {
-					a.showTrayError(err)
-				}
-			})
-		case <-trayStopItem.ClickedCh:
-			a.runTrayAction(func() {
-				if err := a.Stop(); err != nil {
-					a.showTrayError(err)
-				}
-			})
-		case <-trayQuitItem.ClickedCh:
-			a.QuitApp()
-			return
-		}
-	}
-}
-
-func (a *App) startTrayTooltipLoop() {
-	go func() {
-		ticker := time.NewTicker(time.Second)
-		defer ticker.Stop()
-		lastTooltip := ""
-		for range ticker.C {
-			stats := a.GetTrafficStats()
-			status := a.GetStatus()
-			title := "TunFlow · 已停止"
-			if status.Running {
-				title = "TunFlow · 运行中"
-			}
-			tooltip := fmt.Sprintf("%s\n↓ %s/s   ↑ %s/s\n累计 ↓ %s   ↑ %s", title, formatBytes(stats.DownloadPerSecond), formatBytes(stats.UploadPerSecond), formatBytes(stats.DownloadTotal), formatBytes(stats.UploadTotal))
-			if tooltip != lastTooltip {
-				systray.SetTooltip(tooltip)
-				lastTooltip = tooltip
-			}
-		}
-	}()
 }
 
 func (a *App) showTrayError(err error) {
