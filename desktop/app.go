@@ -88,22 +88,37 @@ func NewApp() *App {
 
 func (a *App) startup(ctx context.Context) {
 	a.mu.Lock()
-	defer a.mu.Unlock()
 	a.ctx = ctx
+
 	if err := a.load(); err != nil {
-		if _, statErr := os.Stat(a.configPath()); os.IsNotExist(statErr) {
+		if os.IsNotExist(err) {
 			a.normalizeConfigLocked()
-			if a.saveLocked() == nil {
+			if saveErr := a.saveLocked(); saveErr != nil {
+				a.err = saveErr
+				a.configLoaded = false
+			} else {
 				a.configLoaded = true
+				a.err = nil
 			}
+		} else {
+			// Never replace an existing user config with defaults just because
+			// it is temporarily invalid or incomplete. Keep the file intact and
+			// expose the load error through GetStatus().
+			a.err = err
+			a.configLoaded = false
 		}
 	} else {
 		a.configLoaded = true
+		a.err = nil
 	}
+
 	a.normalizeConfigLocked()
 	a.refreshConfigDiskChecksumLocked()
 	a.startConfigWatcherLocked()
 	a.mu.Unlock()
+
+	// Tray initialization must happen outside a.mu because refreshTrayMenu()
+	// calls GetStatus(), which acquires the same mutex.
 	a.startSystemTray()
 }
 
@@ -121,9 +136,7 @@ func (a *App) shutdown(ctx context.Context) {
 		_ = a.stopLocked()
 	}
 	if a.configLoaded {
-		// Only persist if the on-disk config hasn't been changed externally
-		// since we last loaded/saved it. Otherwise we would overwrite
-		// user edits made while the app was running.
+		// Only persist if the on-disk config has not been changed externally.
 		if a.isConfigDiskUnchangedLocked() {
 			_ = a.saveLocked()
 		}
@@ -301,14 +314,14 @@ func (a *App) SaveConfig(cfg Config) error {
 		return err
 	}
 	a.configLoaded = true
-	// Write config to disk first. Registry changes are best-effort and
-	// must never block config persistence.
+	// Persist config before optional Windows registry changes. Registry
+	// failures must never prevent config.json from being updated.
 	_ = setStartWithWindows(cfg.StartWithWindows)
 	if running {
 		if err := a.applyRunningConfigLocked(oldCfg); err != nil {
 			a.err = err
-			// Keep the saved proxy on disk even when the running engine cannot
-			// hot-reload. The user can stop/start to apply it cleanly.
+			// Keep the saved configuration authoritative. The running core can
+			// be restarted to apply it cleanly if hot reload is not possible.
 			return nil
 		}
 	}
@@ -551,8 +564,10 @@ func (a *App) load() error {
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return fmtConfigError(err)
 	}
-	if cfg.Proxy == "" || cfg.Device == "" {
-		return errors.New("配置文件缺少 proxy 或 device")
+	// An empty proxy is valid for a fresh portable install. Start() and
+	// SaveConfig() still require a usable SOCKS5 endpoint before use.
+	if cfg.Device == "" {
+		return errors.New("配置文件缺少 device")
 	}
 	a.cfg = cfg
 	return nil
@@ -587,6 +602,7 @@ func (a *App) refreshConfigDiskChecksumLocked() {
 	sum := sha256.Sum256(data)
 	a.configDiskChecksum = hex.EncodeToString(sum[:])
 }
+
 func (a *App) isConfigDiskUnchangedLocked() bool {
 	path := a.configPath()
 	data, err := os.ReadFile(path)
