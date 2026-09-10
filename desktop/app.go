@@ -73,7 +73,7 @@ const (
 
 func NewApp() *App {
 	return &App{cfg: Config{
-		Proxy:            "socks5://127.0.0.1:1080",
+		Proxy:            "",
 		Device:           "tun://TunFlow",
 		Mode:             "global",
 		DirectCIDRs:      []string{},
@@ -300,8 +300,8 @@ func (a *App) SaveConfig(cfg Config) error {
 		return err
 	}
 
-	// Normalize the path before writing so the checksum below matches the
-	// exact bytes produced by saveLocked.
+	// Normalize the configuration before writing so the checksum matches the
+	// exact bytes emitted by saveLocked.
 	normalized := &App{cfg: cfg}
 	normalized.normalizeConfigLocked()
 	cfg = normalized.cfg
@@ -314,14 +314,14 @@ func (a *App) SaveConfig(cfg Config) error {
 		return err
 	}
 	a.configLoaded = true
-	// Persist config before optional Windows registry changes. Registry
-	// failures must never prevent config.json from being updated.
+	// Persist the JSON first. Registry changes are best-effort and must not
+	// prevent the configuration from being saved.
 	_ = setStartWithWindows(cfg.StartWithWindows)
 	if running {
 		if err := a.applyRunningConfigLocked(oldCfg); err != nil {
 			a.err = err
-			// Keep the saved configuration authoritative. The running core can
-			// be restarted to apply it cleanly if hot reload is not possible.
+			// Keep the new settings on disk even when the running core cannot
+			// hot-reload them. A subsequent stop/start will use the saved config.
 			return nil
 		}
 	}
@@ -330,9 +330,9 @@ func (a *App) SaveConfig(cfg Config) error {
 }
 
 func validateAndNormalizeConfig(cfg *Config) error {
-	if strings.TrimSpace(cfg.Proxy) == "" {
-		return errors.New("SOCKS5 地址不能为空")
-	}
+	// An empty proxy is a valid saved state: it lets a newly packaged portable
+	// build start with a blank configuration instead of inventing 127.0.0.1:1080.
+	// Start() performs the stricter runtime check before touching the core.
 	if strings.TrimSpace(cfg.Device) == "" {
 		return errors.New("TUN 设备不能为空")
 	}
@@ -564,8 +564,6 @@ func (a *App) load() error {
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return fmtConfigError(err)
 	}
-	// An empty proxy is valid for a fresh portable install. Start() and
-	// SaveConfig() still require a usable SOCKS5 endpoint before use.
 	if cfg.Device == "" {
 		return errors.New("配置文件缺少 device")
 	}
