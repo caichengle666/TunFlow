@@ -262,6 +262,13 @@ func (a *App) SaveConfig(cfg Config) error {
 	if err := validateAndNormalizeConfig(&cfg); err != nil {
 		return err
 	}
+
+	// Normalize the path before writing so the checksum below matches the
+	// exact bytes produced by saveLocked.
+	a.cfg = cfg
+	a.normalizeConfigLocked()
+	cfg = a.cfg
+
 	if err := setStartWithWindows(cfg.StartWithWindows); err != nil {
 		return err
 	}

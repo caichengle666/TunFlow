@@ -115,6 +115,19 @@ func (a *App) configDiskChecksumLocked() string {
 	return a.configDiskChecksum
 }
 
+func (a *App) refreshConfigChecksumIfDiskUnchangedLocked(expected string) bool {
+	data, err := os.ReadFile(a.configPath())
+	if err != nil {
+		return false
+	}
+	sum := sha256.Sum256(data)
+	if hex.EncodeToString(sum[:]) != expected {
+		return false
+	}
+	a.configDiskChecksum = expected
+	return true
+}
+
 func (a *App) reloadConfigFromDisk() {
 	path := a.configPath()
 	cfg, data, err := readConfigFile(path)
@@ -149,10 +162,13 @@ func (a *App) reloadConfigFromDisk() {
 		return
 	}
 
-	// A watcher read can begin before SaveConfig acquires the lock. Re-read
-	// under the lock; otherwise the stale read would be treated as an
-	// external edit and roll back the configuration just saved by the GUI.
-	if currentChecksum := a.configDiskChecksumLocked(); currentChecksum != checksum {
+	// The watcher can read before SaveConfig acquires the lock. Re-read the
+	// file under the lock; if the disk still matches the saved checksum, this
+	// was a stale read and must not roll back the GUI save.
+	if a.configDiskChecksumLocked() == checksum {
+		return
+	}
+	if a.refreshConfigChecksumIfDiskUnchangedLocked(checksum) {
 		return
 	}
 
@@ -184,11 +200,10 @@ func (a *App) reloadConfigFromDisk() {
 	a.cfg = cfg
 	if running {
 		if err := a.applyRunningConfigLocked(oldCfg); err != nil {
-			_ = setStartWithWindows(oldCfg.StartWithWindows)
-			a.cfg = oldCfg
 			a.err = err
-			// Keep the checksum pointing at the last successfully applied file so
-			// the watcher retries this exact external edit.
+			// The file is authoritative. Keep the saved settings even when the
+			// running core cannot hot-reload them; the next start uses them.
+			a.configDiskChecksum = checksum
 			a.emitConfigReload("failed", err.Error())
 			return
 		}

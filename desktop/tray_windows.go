@@ -21,6 +21,7 @@ var (
 	trayOnce     sync.Once
 	trayActionMu sync.Mutex
 	trayBusy     atomic.Bool
+	trayMenuMu   sync.Mutex
 )
 
 func formatBytes(v int64) string {
@@ -48,40 +49,21 @@ func (a *App) startSystemTray() {
 			systray.SetIcon(trayIconICO)
 			systray.SetTooltip("TunFlow")
 
-			openItem := systray.AddMenuItem("打开 TunFlow", "打开控制台")
-			startItem := systray.AddMenuItem("启动 TUN", "启动 TunFlow")
-			stopItem := systray.AddMenuItem("停止 TUN", "停止 TunFlow")
-			systray.AddSeparator()
-			quitItem := systray.AddMenuItem("退出 TunFlow", "退出程序")
+			a.refreshTrayMenu()
 
 			go func() {
-				for {
-					select {
-					case <-openItem.ClickedCh:
-						go a.ShowWindow()
-					case <-startItem.ClickedCh:
-						go a.runTrayAction(func() {
-							if err := a.Start(); err != nil {
-								a.showTrayError(err)
-							}
-						})
-					case <-stopItem.ClickedCh:
-						go a.runTrayAction(func() {
-							if err := a.Stop(); err != nil {
-								a.showTrayError(err)
-							}
-						})
-					case <-quitItem.ClickedCh:
-						a.QuitApp()
-						return
-					}
+				for range systray.TrayOpenedCh {
+					a.refreshTrayMenu()
 				}
 			}()
 
 			go func() {
-				ticker := time.NewTicker(time.Second)
+				ticker := time.NewTicker(5 * time.Second)
 				defer ticker.Stop()
-				running := false
+				lastTooltip := ""
+				refreshTrayMenu := func() {
+					a.refreshTrayMenu()
+				}
 				for range ticker.C {
 					stats := a.GetTrafficStats()
 					status := a.GetStatus()
@@ -89,18 +71,12 @@ func (a *App) startSystemTray() {
 					if status.Running {
 						title = "TunFlow · 运行中"
 					}
-					systray.SetTooltip(fmt.Sprintf("%s\n↓ %s/s   ↑ %s/s\n累计 ↓ %s   ↑ %s", title, formatBytes(stats.DownloadPerSecond), formatBytes(stats.UploadPerSecond), formatBytes(stats.DownloadTotal), formatBytes(stats.UploadTotal)))
-					if status.Running == running {
-						continue
+					tooltip := fmt.Sprintf("%s\n↓ %s/s   ↑ %s/s\n累计 ↓ %s   ↑ %s", title, formatBytes(stats.DownloadPerSecond), formatBytes(stats.UploadPerSecond), formatBytes(stats.DownloadTotal), formatBytes(stats.UploadTotal))
+					if tooltip != lastTooltip {
+						systray.SetTooltip(tooltip)
+						lastTooltip = tooltip
 					}
-					if status.Running {
-						startItem.Disable()
-						stopItem.Enable()
-					} else {
-						startItem.Enable()
-						stopItem.Disable()
-					}
-					running = status.Running
+					refreshTrayMenu()
 				}
 			}()
 		}, func() {})
@@ -117,6 +93,54 @@ func (a *App) runTrayAction(action func()) {
 	}
 	defer trayBusy.Store(false)
 	action()
+	a.refreshTrayMenu()
+}
+
+func (a *App) refreshTrayMenu() {
+	trayMenuMu.Lock()
+	defer trayMenuMu.Unlock()
+
+	status := a.GetStatus()
+	systray.ResetMenu()
+
+	openItem := systray.AddMenuItem("打开 TunFlow", "打开控制台")
+	startItem := systray.AddMenuItem("启动 TUN", "启动 TunFlow")
+	stopItem := systray.AddMenuItem("停止 TUN", "停止 TunFlow")
+	systray.AddSeparator()
+	quitItem := systray.AddMenuItem("退出 TunFlow", "退出程序")
+
+	if status.Running {
+		startItem.Disable()
+	} else {
+		stopItem.Disable()
+	}
+
+	go func() {
+		for {
+			select {
+			case <-openItem.ClickedCh:
+				a.ShowWindow()
+				return
+			case <-startItem.ClickedCh:
+				a.runTrayAction(func() {
+					if err := a.Start(); err != nil {
+						a.showTrayError(err)
+					}
+				})
+				return
+			case <-stopItem.ClickedCh:
+				a.runTrayAction(func() {
+					if err := a.Stop(); err != nil {
+						a.showTrayError(err)
+					}
+				})
+				return
+			case <-quitItem.ClickedCh:
+				a.QuitApp()
+				return
+			}
+		}
+	}()
 }
 
 func (a *App) showTrayError(err error) {
