@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	_ "github.com/xjasonlyu/tun2socks/v2/dns"
 	"github.com/xjasonlyu/tun2socks/v2/engine"
 )
 
