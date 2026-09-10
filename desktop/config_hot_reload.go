@@ -98,6 +98,8 @@ func readConfigFile(path string) (Config, []byte, error) {
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return Config{}, nil, fmtConfigError(err)
 	}
+	// An empty proxy is valid in the persisted configuration. The runtime
+	// start path is responsible for requiring a reachable SOCKS5 endpoint.
 	if strings.TrimSpace(cfg.Device) == "" {
 		return Config{}, nil, errors.New("TUN 设备不能为空")
 	}
@@ -112,8 +114,6 @@ func (a *App) reloadConfigFromDisk() {
 	path := a.configPath()
 	cfg, data, err := readConfigFile(path)
 	if err != nil {
-		// Invalid/incomplete files are deliberately not marked as applied.
-		// The next poll retries after an editor finishes writing the file.
 		return
 	}
 
@@ -141,23 +141,16 @@ func (a *App) reloadConfigFromDisk() {
 	}
 	sum2 := sha256.Sum256(data2)
 	checksum2 := hex.EncodeToString(sum2[:])
-	if checksum2 != checksum {
-		a.mu.Unlock()
-		return
-	}
-	if !reflect.DeepEqual(cfg, cfg2) {
+	if checksum2 != checksum || !reflect.DeepEqual(cfg, cfg2) {
 		a.mu.Unlock()
 		return
 	}
 
-	// Apply the same normalization rules as GUI saving without mutating
-	// the live configuration until the new runtime state is accepted.
 	tmp := &App{cfg: cfg}
 	tmp.normalizeConfigLocked()
 	cfg = tmp.cfg
 
 	if reflect.DeepEqual(cfg, a.cfg) {
-		// The bytes changed but the effective configuration did not.
 		a.configDiskChecksum = checksum
 		a.err = nil
 		emitStatus = "unchanged"
@@ -175,10 +168,23 @@ func (a *App) reloadConfigFromDisk() {
 
 	if err := setStartWithWindows(cfg.StartWithWindows); err != nil {
 		a.err = err
-		// Do not advance configDiskChecksum. A later poll retries the same
-		// configuration automatically after the transient error is gone.
 		emitStatus = "failed"
 		emitMessage = err.Error()
+		needEmit = true
+		a.mu.Unlock()
+		if needEmit {
+			a.emitConfigReload(emitStatus, emitMessage)
+		}
+		return
+	}
+
+	if running && strings.TrimSpace(cfg.Proxy) == "" {
+		// Never replace a running core with an empty SOCKS5 endpoint. The
+		// persisted file remains authoritative and will be used on restart.
+		a.configDiskChecksum = checksum
+		a.err = errors.New("当前运行中不能清空 SOCKS5 地址；请停止 TunFlow 后再清空")
+		emitStatus = "failed"
+		emitMessage = a.err.Error()
 		needEmit = true
 		a.mu.Unlock()
 		if needEmit {
@@ -191,8 +197,8 @@ func (a *App) reloadConfigFromDisk() {
 	if running {
 		if err := a.applyRunningConfigLocked(oldCfg); err != nil {
 			a.err = err
-			// The file is authoritative. Keep the saved settings even when the
-			// running core cannot hot-reload them; the next start uses them.
+			// Keep the saved settings on disk even when the running core cannot
+			// hot-reload them; the next start uses them.
 			a.configDiskChecksum = checksum
 			emitStatus = "failed"
 			emitMessage = err.Error()
