@@ -287,18 +287,17 @@ func (a *App) SaveConfig(cfg Config) error {
 	normalized.normalizeConfigLocked()
 	cfg = normalized.cfg
 
-	if err := setStartWithWindows(cfg.StartWithWindows); err != nil {
-		return err
-	}
 	oldCfg := a.cfg
 	running := engine.Running()
 	a.cfg = cfg
 	if err := a.saveLocked(); err != nil {
 		a.cfg = oldCfg
-		_ = setStartWithWindows(oldCfg.StartWithWindows)
 		return err
 	}
 	a.configLoaded = true
+	// Write config to disk first. Registry changes are best-effort and
+	// must never block config persistence.
+	_ = setStartWithWindows(cfg.StartWithWindows)
 	if running {
 		if err := a.applyRunningConfigLocked(oldCfg); err != nil {
 			a.err = err
