@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -134,6 +135,10 @@ func (a *App) GetConfig() Config {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	return a.cfg
+}
+
+func (a *App) GetConfigPath() string {
+	return a.configPath()
 }
 
 func (a *App) GetNetworkInterfaces() ([]NetworkInterface, error) {
@@ -556,6 +561,13 @@ func (a *App) saveLocked() error {
 	}
 	if err := os.WriteFile(path, data, 0o600); err != nil {
 		return err
+	}
+	stored, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("保存配置后无法读取文件: %w", err)
+	}
+	if !bytes.Equal(stored, data) {
+		return errors.New("保存配置校验失败: 文件内容与当前配置不一致")
 	}
 	sum := sha256.Sum256(data)
 	a.configDiskChecksum = hex.EncodeToString(sum[:])
