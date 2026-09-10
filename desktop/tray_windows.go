@@ -55,7 +55,7 @@ func (a *App) startSystemTray() {
 				a.ShowWindow()
 			})
 			systray.SetOnSecondaryTapped(func() {
-				a.refreshTrayMenu()
+				go a.refreshTrayMenu()
 			})
 			a.startTrayTooltipLoop()
 		}, func() {})
