@@ -16,19 +16,19 @@ func main() {
 	app := NewApp()
 
 	err := wails.Run(&options.App{
-		Title:  "TunFlow",
-		Width:  980,
-		Height: 720,
-		MinWidth: 860,
-		MinHeight: 620,
-		Frameless:       true,
+		Title:             "TunFlow",
+		Width:             980,
+		Height:            720,
+		MinWidth:          860,
+		MinHeight:         620,
+		Frameless:         true,
 		HideWindowOnClose: true,
 		AssetServer: &assetserver.Options{
 			Assets: frontend,
 		},
 		BackgroundColour: &options.RGBA{R: 13, G: 14, B: 21, A: 255},
 		OnStartup:        app.startup,
-		OnShutdown:       app.shutdown,
+		OnShutdown:       app.shutdownNoPersist,
 		Bind: []interface{}{
 			app,
 		},
