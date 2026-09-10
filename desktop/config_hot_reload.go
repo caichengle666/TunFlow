@@ -17,7 +17,7 @@ import (
 	"github.com/xjasonlyu/tun2socks/v2/engine"
 )
 
-const configWatchInterval = 2 * time.Second
+const configWatchInterval = 500 * time.Millisecond
 
 func (a *App) startConfigWatcherLocked() {
 	if a.configWatchStop != nil {
@@ -98,9 +98,6 @@ func readConfigFile(path string) (Config, []byte, error) {
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return Config{}, nil, fmtConfigError(err)
 	}
-	if strings.TrimSpace(cfg.Proxy) == "" {
-		return Config{}, nil, errors.New("SOCKS5 地址不能为空")
-	}
 	if strings.TrimSpace(cfg.Device) == "" {
 		return Config{}, nil, errors.New("TUN 设备不能为空")
 	}
@@ -116,16 +113,15 @@ func (a *App) reloadConfigFromDisk() {
 	cfg, data, err := readConfigFile(path)
 	if err != nil {
 		// Invalid/incomplete files are deliberately not marked as applied.
-		// The next poll will retry after an editor finishes writing the file.
+		// The next poll retries after an editor finishes writing the file.
 		return
 	}
 
 	sum := sha256.Sum256(data)
 	checksum := hex.EncodeToString(sum[:])
 
-	// Capture emit status while holding the lock, but emit after releasing it
-	// to avoid a deadlock: the JS event handler calls GetConfig() which also
-	// acquires a.mu.
+	// Capture event data while holding the lock, but emit after releasing it.
+	// The JS event handler may call GetConfig(), which also acquires a.mu.
 	var emitStatus, emitMessage string
 	var needEmit bool
 
@@ -136,7 +132,7 @@ func (a *App) reloadConfigFromDisk() {
 	}
 
 	// Read a stable snapshot twice so an editor writing the file is not
-	// treated as a finished change; the next tick will pick up the final data.
+	// treated as a finished change; the next poll picks up the final data.
 	path = a.configPath()
 	cfg2, data2, err2 := readConfigFile(path)
 	if err2 != nil {
@@ -154,8 +150,8 @@ func (a *App) reloadConfigFromDisk() {
 		return
 	}
 
-	// Run the exact same normalization rules as the GUI save path, but do not
-	// mutate the live configuration until the new runtime state is accepted.
+	// Apply the same normalization rules as GUI saving without mutating
+	// the live configuration until the new runtime state is accepted.
 	tmp := &App{cfg: cfg}
 	tmp.normalizeConfigLocked()
 	cfg = tmp.cfg
@@ -179,7 +175,7 @@ func (a *App) reloadConfigFromDisk() {
 
 	if err := setStartWithWindows(cfg.StartWithWindows); err != nil {
 		a.err = err
-		// Do not advance configDiskChecksum. A later poll will retry the same
+		// Do not advance configDiskChecksum. A later poll retries the same
 		// configuration automatically after the transient error is gone.
 		emitStatus = "failed"
 		emitMessage = err.Error()
