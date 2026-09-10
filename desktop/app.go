@@ -1,4 +1,4 @@
-package main
+﻿package main
 
 import (
 	"bytes"
@@ -290,6 +290,7 @@ func (a *App) SaveConfig(cfg Config) error {
 	oldCfg := a.cfg
 	running := engine.Running()
 	a.cfg = cfg
+	os.WriteFile("C:\\Users\\zhumao\\Desktop\\tunflow_save_debug.log", []byte(fmt.Sprintf("input=%s old=%s running=%v\n", cfg.Proxy, oldCfg.Proxy, running)), 0644)
 	if err := a.saveLocked(); err != nil {
 		a.cfg = oldCfg
 		return err
