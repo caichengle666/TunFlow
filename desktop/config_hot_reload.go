@@ -123,9 +123,15 @@ func (a *App) reloadConfigFromDisk() {
 	sum := sha256.Sum256(data)
 	checksum := hex.EncodeToString(sum[:])
 
+	// Capture emit status while holding the lock, but emit after releasing it
+	// to avoid a deadlock: the JS event handler calls GetConfig() which also
+	// acquires a.mu.
+	var emitStatus, emitMessage string
+	var needEmit bool
+
 	a.mu.Lock()
-	defer a.mu.Unlock()
 	if checksum == a.configDiskChecksum {
+		a.mu.Unlock()
 		return
 	}
 
@@ -134,14 +140,17 @@ func (a *App) reloadConfigFromDisk() {
 	path = a.configPath()
 	cfg2, data2, err2 := readConfigFile(path)
 	if err2 != nil {
+		a.mu.Unlock()
 		return
 	}
 	sum2 := sha256.Sum256(data2)
 	checksum2 := hex.EncodeToString(sum2[:])
 	if checksum2 != checksum {
+		a.mu.Unlock()
 		return
 	}
 	if !reflect.DeepEqual(cfg, cfg2) {
+		a.mu.Unlock()
 		return
 	}
 
@@ -155,7 +164,13 @@ func (a *App) reloadConfigFromDisk() {
 		// The bytes changed but the effective configuration did not.
 		a.configDiskChecksum = checksum
 		a.err = nil
-		a.emitConfigReload("unchanged", "")
+		emitStatus = "unchanged"
+		emitMessage = ""
+		needEmit = true
+		a.mu.Unlock()
+		if needEmit {
+			a.emitConfigReload(emitStatus, emitMessage)
+		}
 		return
 	}
 
@@ -166,7 +181,13 @@ func (a *App) reloadConfigFromDisk() {
 		a.err = err
 		// Do not advance configDiskChecksum. A later poll will retry the same
 		// configuration automatically after the transient error is gone.
-		a.emitConfigReload("failed", err.Error())
+		emitStatus = "failed"
+		emitMessage = err.Error()
+		needEmit = true
+		a.mu.Unlock()
+		if needEmit {
+			a.emitConfigReload(emitStatus, emitMessage)
+		}
 		return
 	}
 
@@ -177,14 +198,26 @@ func (a *App) reloadConfigFromDisk() {
 			// The file is authoritative. Keep the saved settings even when the
 			// running core cannot hot-reload them; the next start uses them.
 			a.configDiskChecksum = checksum
-			a.emitConfigReload("failed", err.Error())
+			emitStatus = "failed"
+			emitMessage = err.Error()
+			needEmit = true
+			a.mu.Unlock()
+			if needEmit {
+				a.emitConfigReload(emitStatus, emitMessage)
+			}
 			return
 		}
 	}
 
 	a.configDiskChecksum = checksum
 	a.err = nil
-	a.emitConfigReload("applied", "")
+	emitStatus = "applied"
+	emitMessage = ""
+	needEmit = true
+	a.mu.Unlock()
+	if needEmit {
+		a.emitConfigReload(emitStatus, emitMessage)
+	}
 }
 
 func (a *App) emitConfigReload(status, message string) {

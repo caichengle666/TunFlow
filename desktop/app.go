@@ -1,4 +1,4 @@
-﻿package main
+package main
 
 import (
 	"bytes"
@@ -103,6 +103,7 @@ func (a *App) startup(ctx context.Context) {
 	a.normalizeConfigLocked()
 	a.refreshConfigDiskChecksumLocked()
 	a.startConfigWatcherLocked()
+	a.mu.Unlock()
 	a.startSystemTray()
 }
 
@@ -120,7 +121,12 @@ func (a *App) shutdown(ctx context.Context) {
 		_ = a.stopLocked()
 	}
 	if a.configLoaded {
-		_ = a.saveLocked()
+		// Only persist if the on-disk config hasn't been changed externally
+		// since we last loaded/saved it. Otherwise we would overwrite
+		// user edits made while the app was running.
+		if a.isConfigDiskUnchangedLocked() {
+			_ = a.saveLocked()
+		}
 	}
 	a.mu.Unlock()
 	if watchStop != nil {
@@ -290,7 +296,6 @@ func (a *App) SaveConfig(cfg Config) error {
 	oldCfg := a.cfg
 	running := engine.Running()
 	a.cfg = cfg
-	os.WriteFile("C:\\Users\\zhumao\\Desktop\\tunflow_save_debug.log", []byte(fmt.Sprintf("input=%s old=%s running=%v\n", cfg.Proxy, oldCfg.Proxy, running)), 0644)
 	if err := a.saveLocked(); err != nil {
 		a.cfg = oldCfg
 		return err
@@ -581,6 +586,16 @@ func (a *App) refreshConfigDiskChecksumLocked() {
 	}
 	sum := sha256.Sum256(data)
 	a.configDiskChecksum = hex.EncodeToString(sum[:])
+}
+func (a *App) isConfigDiskUnchangedLocked() bool {
+	path := a.configPath()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	sum := sha256.Sum256(data)
+	checksum := hex.EncodeToString(sum[:])
+	return checksum == a.configDiskChecksum
 }
 
 func errString(err error) string {
