@@ -1,4 +1,4 @@
-package utils
+﻿package utils
 
 import (
 	"net"
@@ -30,5 +30,5 @@ func SafeConnClose(c net.Conn, err error) {
 
 // SerializeSocksAddr serializes metadata to SOCKSv5 address.
 func SerializeSocksAddr(m *M.Metadata) socks5.Addr {
-	return socks5.SerializeAddr("", m.DstIP, m.DstPort)
+	if m.DstHost != "" { return socks5.SerializeAddr(m.DstHost, m.DstIP, m.DstPort) }; return socks5.SerializeAddr("", m.DstIP, m.DstPort)
 }

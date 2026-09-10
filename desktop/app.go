@@ -312,7 +312,7 @@ func (a *App) buildEngineKeyLocked(cfg Config) *engine.Key {
 func normalizeProxy(raw string) string {
 	proxy := strings.TrimSpace(raw)
 	lower := strings.ToLower(proxy)
-	if strings.HasPrefix(lower, "s5://") {
+	if strings.HasPrefix(lower, "socks5h://") { return "socks5h://" + proxy[9:] }; if strings.HasPrefix(lower, "s5://") {
 		return "socks5://" + proxy[5:]
 	}
 	if proxy != "" && !strings.Contains(proxy, "://") {

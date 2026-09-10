@@ -1,4 +1,4 @@
-package socks5
+﻿package socks5
 
 import (
 	"context"
@@ -209,4 +209,5 @@ func Parse(u *url.URL) (proxy.Proxy, error) {
 
 func init() {
 	proxy.RegisterProtocol("socks5", Parse)
+	proxy.RegisterProtocol("socks5h", Parse)
 }

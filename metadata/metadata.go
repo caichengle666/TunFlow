@@ -1,4 +1,4 @@
-package metadata
+﻿package metadata
 
 import (
 	"net"
@@ -11,6 +11,7 @@ type Metadata struct {
 	SrcIP   netip.Addr `json:"sourceIP"`
 	MidIP   netip.Addr `json:"dialerIP"`
 	DstIP   netip.Addr `json:"destinationIP"`
+	DstHost string     `json:"destinationHost"`
 	SrcPort uint16     `json:"sourcePort"`
 	MidPort uint16     `json:"dialerPort"`
 	DstPort uint16     `json:"destinationPort"`

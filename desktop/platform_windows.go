@@ -1,4 +1,4 @@
-//go:build windows
+﻿//go:build windows
 
 package main
 
@@ -273,6 +273,9 @@ func (a *App) setupRoutesLocked() error {
 	}
 	if err := runWindows("netsh", "interface", "ipv4", "set", "address", "name="+name, "source=static", "addr=198.18.0.1", "mask=255.254.0.0", "gateway=none"); err != nil {
 		return fmt.Errorf("配置 TUN 地址失败: %w", err)
+	}
+	if err := runWindows("netsh", "interface", "ipv4", "set", "dns", "name="+name, "source=static", "addr=8.8.8.8", "register=primary"); err != nil {
+		return fmt.Errorf("配置 TUN DNS 失败: %w", err)
 	}
 
 	added := make([]string, 0, len(proxyIPs))
