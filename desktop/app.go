@@ -19,7 +19,6 @@ import (
 
 	_ "github.com/xjasonlyu/tun2socks/v2/dns"
 	"github.com/xjasonlyu/tun2socks/v2/engine"
-	"github.com/xjasonlyu/tun2socks/v2/tunnel/statistic"
 )
 
 const localRestAPIAddr = "127.0.0.1:7788"
@@ -135,54 +134,6 @@ func (a *App) GetStatus() Status {
 }
 func (a *App) GetTrafficStats() engine.TrafficStats { return engine.GetTrafficStats() }
 
-// GetLocalAPIAddress returns the fixed local REST API address used for
-// external tooling (e.g. scripts, curl) to query connections / traffic / version.
-func (a *App) GetLocalAPIAddress() string { return localRestAPIAddr }
-
-// GetConnections returns the current active connections tracked by the
-// statistic manager. Each entry contains the connection ID, protocol,
-// source/destination address:port, and cumulative upload/download bytes.
-func (a *App) GetConnections() ([]map[string]any, error) {
-	if !engine.Running() {
-		return nil, nil
-	}
-	snap := statistic.DefaultManager.Snapshot()
-	result := make([]map[string]any, 0, len(snap.Connections))
-	for _, c := range snap.Connections {
-		entry := map[string]any{"id": c.ID()}
-		if info, ok := c.(interface{ Info() map[string]any }); ok {
-			entry = info.Info()
-		}
-		result = append(result, entry)
-	}
-	return result, nil
-}
-
-// CloseConnection asks the statistic manager to close a single connection by ID.
-func (a *App) CloseConnection(id string) error {
-	if !engine.Running() || id == "" {
-		return nil
-	}
-	snap := statistic.DefaultManager.Snapshot()
-	for _, c := range snap.Connections {
-		if c.ID() == id {
-			_ = c.Close()
-			return nil
-		}
-	}
-	return nil
-}
-
-// CloseAllConnections closes every tracked connection.
-func (a *App) CloseAllConnections() {
-	if !engine.Running() {
-		return
-	}
-	snap := statistic.DefaultManager.Snapshot()
-	for _, c := range snap.Connections {
-		_ = c.Close()
-	}
-}
 
 func (a *App) GetNetworkInterfaces() ([]NetworkInterface, error) {
 	interfaces, err := net.Interfaces()
