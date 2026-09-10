@@ -18,10 +18,14 @@ import (
 var trayIconICO []byte
 
 var (
-	trayOnce     sync.Once
-	trayActionMu sync.Mutex
-	trayBusy     atomic.Bool
-	trayMenuMu   sync.Mutex
+	trayOnce      sync.Once
+	trayActionMu  sync.Mutex
+	trayBusy      atomic.Bool
+	trayMenuMu    sync.Mutex
+	trayOpenItem  *systray.MenuItem
+	trayStartItem *systray.MenuItem
+	trayStopItem  *systray.MenuItem
+	trayQuitItem  *systray.MenuItem
 )
 
 func formatBytes(v int64) string {
@@ -49,14 +53,17 @@ func (a *App) startSystemTray() {
 			systray.SetIcon(trayIconICO)
 			systray.SetTooltip("TunFlow")
 
+			trayOpenItem = systray.AddMenuItem("打开 TunFlow", "打开控制台")
+			trayStartItem = systray.AddMenuItem("启动 TUN", "启动 TunFlow")
+			trayStopItem = systray.AddMenuItem("停止 TUN", "停止 TunFlow")
+			systray.AddSeparator()
+			trayQuitItem = systray.AddMenuItem("退出 TunFlow", "退出程序")
 			a.refreshTrayMenu()
 
 			systray.SetOnTapped(func() {
 				a.ShowWindow()
 			})
-			systray.SetOnSecondaryTapped(func() {
-				go a.refreshTrayMenu()
-			})
+			go a.handleTrayMenu()
 			a.startTrayTooltipLoop()
 		}, func() {})
 		a.trayEnd = endLoop
@@ -79,42 +86,39 @@ func (a *App) refreshTrayMenu() {
 	trayMenuMu.Lock()
 	defer trayMenuMu.Unlock()
 
+	if trayStartItem == nil || trayStopItem == nil {
+		return
+	}
 	status := a.GetStatus()
-	systray.ResetMenu()
-
-	openItem := systray.AddMenuItem("打开 TunFlow", "打开控制台")
-	startItem := systray.AddMenuItem("启动 TUN", "启动 TunFlow")
-	stopItem := systray.AddMenuItem("停止 TUN", "停止 TunFlow")
-	systray.AddSeparator()
-	quitItem := systray.AddMenuItem("退出 TunFlow", "退出程序")
 
 	if status.Running {
-		startItem.Disable()
+		trayStartItem.Disable()
+		trayStopItem.Enable()
 	} else {
-		stopItem.Disable()
+		trayStartItem.Enable()
+		trayStopItem.Disable()
 	}
+}
 
+func (a *App) handleTrayMenu() {
 	go func() {
 		for {
 			select {
-			case <-openItem.ClickedCh:
+			case <-trayOpenItem.ClickedCh:
 				a.ShowWindow()
-				return
-			case <-startItem.ClickedCh:
+			case <-trayStartItem.ClickedCh:
 				a.runTrayAction(func() {
 					if err := a.Start(); err != nil {
 						a.showTrayError(err)
 					}
 				})
-				return
-			case <-stopItem.ClickedCh:
+			case <-trayStopItem.ClickedCh:
 				a.runTrayAction(func() {
 					if err := a.Stop(); err != nil {
 						a.showTrayError(err)
 					}
 				})
-				return
-			case <-quitItem.ClickedCh:
+			case <-trayQuitItem.ClickedCh:
 				a.QuitApp()
 				return
 			}
