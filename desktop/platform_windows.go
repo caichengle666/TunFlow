@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"syscall"
 )
 
 type routeState struct {
@@ -31,6 +32,7 @@ type tunConfig struct {
 
 func runWindows(args ...string) error {
 	cmd := exec.Command(args[0], args[1:]...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		msg := strings.TrimSpace(string(out))
@@ -45,6 +47,7 @@ func runWindows(args ...string) error {
 func runPowerShellText(script string) (string, error) {
 	wrapper := `$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue'; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false); $OutputEncoding = New-Object System.Text.UTF8Encoding($false); ` + script
 	cmd := exec.Command("powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", wrapper)
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	out, err := cmd.Output()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
@@ -229,7 +232,9 @@ func restoreTunConfig(name string, cfg tunConfig) error {
 }
 
 func windowsTunDefaultRouteReady() (bool, error) {
-	out, err := exec.Command("route", "print", "0.0.0.0").CombinedOutput()
+	cmd := exec.Command("route", "print", "0.0.0.0")
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return false, fmt.Errorf("读取 TUN 默认路由失败: %w", err)
 	}
