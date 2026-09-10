@@ -81,7 +81,7 @@ func (a *App) startup(ctx context.Context) {
 		if os.IsNotExist(err) {
 			if err := normalizeConfig(&a.cfg); err != nil { a.err = err; a.configLoaded = false } else if err := a.writeConfigLocked(); err != nil { a.err = err; a.configLoaded = false } else { a.err = nil; a.configLoaded = true }
 		} else { a.err = err; a.configLoaded = false }
-	} else { a.err = nil; a.configLoaded = true }
+	}
 	a.refreshConfigChecksumLocked()
 	a.startConfigWatcherLocked()
 	a.mu.Unlock()
@@ -118,6 +118,24 @@ func (a *App) GetNetworkInterfaces() ([]NetworkInterface, error) {
 		result = append(result, NetworkInterface{Name:iface.Name, Addresses:addresses})
 	}
 	return result, nil
+}
+
+// SaveConfigJSON is the frontend-safe configuration write path. The UI passes
+// the exact JSON payload it built from the input controls, avoiding any
+// ambiguity in Wails' struct argument marshalling.
+func (a *App) SaveConfigJSON(raw string) error {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return errors.New("保存配置失败: 配置内容为空")
+	}
+	var cfg Config
+	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
+		return fmt.Errorf("保存配置失败: JSON 配置格式无效: %w", err)
+	}
+	if strings.TrimSpace(cfg.Proxy) == "" {
+		return errors.New("保存配置失败: proxy 字段为空，请检查上游 SOCKS5 输入")
+	}
+	return a.SaveConfig(cfg)
 }
 
 func (a *App) SaveConfig(cfg Config) error {
