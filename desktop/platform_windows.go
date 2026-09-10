@@ -252,7 +252,8 @@ func (a *App) setupRoutesLocked() error {
 	}
 	original, err := readTunConfig(name)
 	if err != nil {
-		return err
+		// TUN 网卡刚刚创建时可能还没有 IP 地址，使用默认空配置。
+		original = tunConfig{}
 	}
 	gateway, err := defaultGateway(a.runtimeInterface)
 	if err != nil {
@@ -336,3 +337,5 @@ func (a *App) teardownRoutesLocked() error {
 	}
 	return firstErr
 }
+
+
