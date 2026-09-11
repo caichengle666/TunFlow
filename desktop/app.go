@@ -39,17 +39,22 @@ type App struct {
 }
 
 type Config struct {
-	Proxy            string   `json:"proxy"`
-	Device           string   `json:"device"`
-	Interface        string   `json:"interface"`
-	Mode             string   `json:"mode"`
-	DirectCIDRs      []string `json:"directCIDRs,omitempty"`
-	DirectRules      []string `json:"directRules,omitempty"`
-	ProxyRules       []string `json:"proxyRules,omitempty"`
-	DefaultRoute     string   `json:"defaultRoute"`
-	GeoIPFile        string   `json:"geoIPFile,omitempty"`
-	AutoRoute        bool     `json:"autoRoute"`
-	StartWithWindows bool     `json:"startWithWindows"`
+	Proxy                    string   `json:"proxy"`
+	Device                   string   `json:"device"`
+	Interface                string   `json:"interface"`
+	Mode                     string   `json:"mode"`
+	DirectCIDRs              []string `json:"directCIDRs,omitempty"`
+	DirectRules              []string `json:"directRules,omitempty"`
+	ProxyRules               []string `json:"proxyRules,omitempty"`
+	DefaultRoute             string   `json:"defaultRoute"`
+	GeoIPFile                string   `json:"geoIPFile,omitempty"`
+	AutoRoute                bool     `json:"autoRoute"`
+	StartWithWindows         bool     `json:"startWithWindows"`
+	MTU                      int      `json:"mtu,omitempty"`
+	TCPModerateReceiveBuffer bool     `json:"tcpModerateReceiveBuffer,omitempty"`
+	TCPSendBufferSize        string   `json:"tcpSendBufferSize,omitempty"`
+	TCPReceiveBufferSize     string   `json:"tcpReceiveBufferSize,omitempty"`
+	UDPTimeout               int      `json:"udpTimeout,omitempty"`
 }
 
 type Status struct {
@@ -309,16 +314,47 @@ func (a *App) buildEngineKeyLocked(cfg Config) *engine.Key {
 			geo = p
 		}
 	}
-	return &engine.Key{Proxy: normalizeProxy(cfg.Proxy), Device: strings.TrimSpace(cfg.Device), Interface: iface, RoutingMode: strings.TrimSpace(cfg.Mode), DirectCIDRs: append([]string(nil), cfg.DirectCIDRs...), DirectRules: append([]string(nil), cfg.DirectRules...), ProxyRules: append([]string(nil), cfg.ProxyRules...), DefaultRoute: cfg.DefaultRoute, GeoIPFile: geo, LogLevel: "info", RestAPI: localRestAPIAddr}
+	return &engine.Key{
+		Proxy:                    normalizeProxy(cfg.Proxy),
+		Device:                   strings.TrimSpace(cfg.Device),
+		Interface:                iface,
+		RoutingMode:              strings.TrimSpace(cfg.Mode),
+		DirectCIDRs:              append([]string(nil), cfg.DirectCIDRs...),
+		DirectRules:              append([]string(nil), cfg.DirectRules...),
+		ProxyRules:               append([]string(nil), cfg.ProxyRules...),
+		DefaultRoute:             cfg.DefaultRoute,
+		GeoIPFile:                geo,
+		LogLevel:                 "info",
+		RestAPI:                  localRestAPIAddr,
+		MTU:                      cfg.MTU,
+		TCPModerateReceiveBuffer: cfg.TCPModerateReceiveBuffer,
+		TCPSendBufferSize:        strings.TrimSpace(cfg.TCPSendBufferSize),
+		TCPReceiveBufferSize:     strings.TrimSpace(cfg.TCPReceiveBufferSize),
+		UDPTimeout:               time.Duration(cfg.UDPTimeout) * time.Second,
+	}
 }
+
+// normalizeProxy ensures the proxy string has a scheme prefix so the
+// tun2socks engine can dispatch it to the correct protocol handler.
+// Supported schemes: socks5, socks5h, ss, http, ssh.
+// Bare host:port (no scheme) defaults to socks5.
+var knownProxySchemes = []string{"socks5h://", "socks5://", "ss://", "http://", "https://", "ssh://"}
 
 func normalizeProxy(raw string) string {
 	proxy := strings.TrimSpace(raw)
-	lower := strings.ToLower(proxy)
-	if strings.HasPrefix(lower, "socks5h://") { return "socks5h://" + proxy[9:] }; if strings.HasPrefix(lower, "s5://") {
-		return "socks5://" + proxy[5:]
+	if proxy == "" {
+		return ""
 	}
-	if proxy != "" && !strings.Contains(proxy, "://") {
+	lower := strings.ToLower(proxy)
+	for _, scheme := range knownProxySchemes {
+		if strings.HasPrefix(lower, scheme) {
+			return scheme + proxy[len(scheme):]
+		}
+	}
+	if strings.HasPrefix(lower, "s5://") {
+		return "socks5://" + proxy[4:]
+	}
+	if !strings.Contains(proxy, "://") {
 		return "socks5://" + proxy
 	}
 	return proxy
@@ -350,6 +386,12 @@ func normalizeConfig(cfg *Config) error {
 	}
 	if cfg.GeoIPFile == "" {
 		cfg.GeoIPFile = "geoip.dat"
+	}
+	if cfg.MTU < 0 || cfg.MTU > 65535 {
+		return fmt.Errorf("MTU 无效: %d (支持 0-65535，0 表示自动)", cfg.MTU)
+	}
+	if cfg.UDPTimeout < 0 || cfg.UDPTimeout > 3600 {
+		return fmt.Errorf("UDP 超时无效: %d (支持 0-3600 秒，0 表示默认)", cfg.UDPTimeout)
 	}
 	return nil
 }
